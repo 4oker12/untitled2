@@ -1,0 +1,24 @@
+{
+  "name": "app-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "workspaces": [
+    "app/frontend",
+    "app/bff",
+    "app/backend",
+    "app/shared/types"
+  ],
+  "scripts": {
+    "dev": "concurrently -n BFF,BACKEND,FRONT \"pnpm --filter @app/bff dev\" \"pnpm --filter @app/backend dev\" \"pnpm --filter @app/frontend dev\"",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @app/backend prisma migrate dev",
+    "db:reset": "pnpm --filter @app/backend prisma migrate reset --force && pnpm --filter @app/backend prisma db seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
