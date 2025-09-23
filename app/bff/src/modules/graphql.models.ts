@@ -1,32 +1,38 @@
 // src/modules/graphql.models.ts
-import { Field, ObjectType, registerEnumType, InputType, ID } from '@nestjs/graphql';
+// [NOTE] Явно указываем типы в @Field для всех string-полей и enum.
+// Это устраняет UndefinedTypeError при сборке схемы.
 
-export enum Role {
+import { Field, ID, InputType, ObjectType, registerEnumType } from '@nestjs/graphql';
+
+// [ADDED] Enum для роли вместо string union
+export enum RoleGql {
   ADMIN = 'ADMIN',
   USER = 'USER',
 }
-registerEnumType(Role, { name: 'Role' });
+registerEnumType(RoleGql, { name: 'Role' });
 
 @ObjectType()
-export class User {
+export class UserGql {
   @Field(() => ID)
   id!: string;
 
   @Field(() => String)
   email!: string;
 
+  // [FIX] Явно указываем тип String и nullable
   @Field(() => String, { nullable: true })
   name?: string | null;
 
-  @Field(() => Role)
-  role!: Role;
+  // [FIX] Явно указываем enum тип и nullable
+  @Field(() => RoleGql, { nullable: true })
+  role?: RoleGql | null;
+
+  // [FIX] Явно указываем тип String и nullable
+  @Field(() => String, { nullable: true })
+  handle?: string | null;
 }
 
-@ObjectType()
-export class AuthPayload {
-  @Field(() => User)
-  user!: User;
-}
+// ---------- Inputs ----------
 
 @InputType()
 export class RegisterInput {
@@ -36,8 +42,12 @@ export class RegisterInput {
   @Field(() => String)
   password!: string;
 
+  // [FIX] явные типы
   @Field(() => String, { nullable: true })
   name?: string | null;
+
+  @Field(() => String, { nullable: true })
+  handle?: string | null;
 }
 
 @InputType()
@@ -47,19 +57,4 @@ export class LoginInput {
 
   @Field(() => String)
   password!: string;
-}
-
-@InputType()
-export class CreateUserInput {
-  @Field(() => String)
-  email!: string;
-
-  @Field(() => String)
-  password!: string;
-
-  @Field(() => String, { nullable: true })
-  name?: string | null;
-
-  @Field(() => Role)
-  role!: Role;
 }

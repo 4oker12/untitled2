@@ -1,22 +1,52 @@
-import { z } from 'zod';
+// app/backend/src/modules/auth/dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  Length,
+  MinLength,
+} from 'class-validator';
 
-export const RegisterSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(1).max(100).optional(),
-});
-export type RegisterDto = z.infer<typeof RegisterSchema>;
+export enum Role {
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+}
 
-export const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-export type LoginDto = z.infer<typeof LoginSchema>;
+export class RegisterDto {
+  @ApiProperty({ example: 'user1@example.com' })
+  @IsEmail()
+  email!: string;
 
-export const CreateUserSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(1).max(100).optional(),
-  role: z.enum(['ADMIN', 'USER']).default('USER').optional(),
-});
-export type CreateUserDto = z.infer<typeof CreateUserSchema>;
+  @ApiProperty({ example: 'User1234!', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  password!: string;
+
+  // ▼▼▼ ADDED: никнейм пользователя (обязателен при регистрации)
+  @ApiProperty({ example: 'john_doe' })
+  @IsString()
+  @Length(3, 32)
+  handle!: string;
+  // ▲▲▲
+
+  @ApiProperty({ example: 'User One', required: false, nullable: true, minLength: 1, maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  name?: string | null;
+}
+
+export class LoginDto {
+  @ApiProperty({ example: 'user1@example.com' })
+  @IsEmail()
+  email!: string;
+
+  @ApiProperty({ example: 'User1234!' })
+  @IsString()
+  password!: string;
+}
+
+
+

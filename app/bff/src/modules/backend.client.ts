@@ -1,56 +1,94 @@
-import type { Request, Response } from 'express';
-import fetch, { Headers } from 'node-fetch';
+// src/modules/backend.client.ts
+// Typed fetch client for backend (Node >=18).
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
+export type ApiOk<T> = { data: T };
+export type ApiErr = { error: { code: string; message?: string } | null; data: null };
 
 export class BackendClient {
-  constructor(private readonly req: Request, private readonly res: Response) {}
+  constructor(
+      private readonly baseUrl: string,
+      private readonly getAuthHeaders: () => Record<string, string> | Promise<Record<string, string>> = () => ({})
+  ) {}
 
-  private buildHeaders(extra?: Record<string, string>) {
-    const headers = new Headers();
-    headers.set('content-type', 'application/json');
-    // Forward Authorization if present
-    const auth = this.req.headers['authorization'];
-    if (auth) headers.set('authorization', Array.isArray(auth) ? auth[0] : auth);
-    // Forward CSRF if present (optional)
-    const csrf = this.req.headers['x-csrf'];
-    if (csrf) headers.set('x-csrf', Array.isArray(csrf) ? csrf[0] : csrf);
-    // Forward cookie header as-is to backend
-    const cookie = this.req.headers['cookie'];
-    if (cookie) headers.set('cookie', Array.isArray(cookie) ? cookie.join('; ') : cookie);
-    if (extra) for (const [k, v] of Object.entries(extra)) headers.set(k, v);
-    return headers;
+  async get<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = await this.mergeHeaders(init);
+    const res = await fetch(this.baseUrl + path, { method: 'GET', headers, ...init });
+    return this.parse<T>(res);
   }
 
-  private async call(path: string, init?: RequestInit) {
-    const url = `${BACKEND_URL}${path}`;
-    const resp = await fetch(url, {
-      credentials: 'include' as any,
-      redirect: 'manual',
+  async post<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+    const headers = await this.mergeHeaders(init, { 'Content-Type': 'application/json' });
+    const res = await fetch(this.baseUrl + path, {
+      method: 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
       ...init,
-      headers: this.buildHeaders(init?.headers as any),
-    } as any);
-
-    // Pipe Set-Cookie back to client
-    const setCookie = resp.headers.raw()['set-cookie'];
-    if (setCookie && setCookie.length) {
-      // using append to avoid overwriting multiple cookies
-      for (const c of setCookie) this.res.append('set-cookie', c);
-    }
-
-    const json = await resp.json().catch(() => null);
-    if (!resp.ok) {
-      const message = (json as any)?.error?.message || `Backend error: ${resp.status}`;
-      throw new Error(message);
-    }
-    return json;
+    });
+    return this.parse<T>(res);
   }
 
-  register(body: any) { return this.call('/auth/register', { method: 'POST', body: JSON.stringify(body) }); }
-  login(body: any) { return this.call('/auth/login', { method: 'POST', body: JSON.stringify(body) }); }
-  refresh() { return this.call('/auth/refresh', { method: 'POST', body: JSON.stringify({}) }); }
-  logout() { return this.call('/auth/logout', { method: 'POST', body: JSON.stringify({}) }); }
-  me() { return this.call('/users/me', { method: 'GET' }); }
-  listUsers() { return this.call('/users', { method: 'GET' }); }
-  createUser(body: any) { return this.call('/users', { method: 'POST', body: JSON.stringify(body) }); }
+  async delete<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = await this.mergeHeaders(init);
+    const res = await fetch(this.baseUrl + path, { method: 'DELETE', headers, ...init });
+    return this.parse<T>(res);
+  }
+
+  // --- raw POST (нужен для Set-Cookie) ---
+  async postRaw(
+      path: string,
+      body?: unknown,
+      init?: RequestInit
+  ): Promise<{ json: unknown; cookies: string[]; status: number }> {
+    const headers = await this.mergeHeaders(init, { 'Content-Type': 'application/json' });
+    const res = await fetch(this.baseUrl + path, {
+      method: 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      ...init,
+    });
+
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : null;
+
+    // собрать Set-Cookie (node-fetch vs undici)
+    const anyHeaders: any = res.headers as any;
+    const raw = typeof anyHeaders?.raw === 'function' ? anyHeaders.raw() : undefined;
+    const cookies: string[] =
+        (raw && raw['set-cookie']) ??
+        (res.headers.get('set-cookie') ? [res.headers.get('set-cookie') as string] : []);
+
+    if (!res.ok) {
+      const bodySnippet =
+          json && typeof json === 'object'
+              ? JSON.stringify(json)
+              : (typeof json === 'string' ? json : '');
+      const err: any = new Error(`Backend error ${res.status}${bodySnippet ? `: ${bodySnippet}` : ''}`);
+      err.status = res.status;
+      err.body = json;
+      throw err;
+    }
+    return { json, cookies, status: res.status };
+  }
+
+  // ---- helpers ----
+  private async mergeHeaders(init?: RequestInit, extra?: Record<string, string>): Promise<Record<string, string>> {
+    const auth = await Promise.resolve(this.getAuthHeaders());
+    return { ...(extra ?? {}), ...(init?.headers as Record<string, string> | undefined ?? {}), ...auth };
+  }
+
+  private async parse<T>(res: Response): Promise<T> {
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const bodySnippet =
+          json && typeof json === 'object'
+              ? JSON.stringify(json)
+              : (typeof json === 'string' ? json : '');
+      const err: any = new Error(`Backend error ${res.status}${bodySnippet ? `: ${bodySnippet}` : ''}`);
+      err.status = res.status;
+      err.body = json;
+      throw err;
+    }
+    return json as T;
+  }
 }

@@ -1,32 +1,32 @@
-import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
-import type { Request, Response } from 'express';
-import { CreateUserInput, User } from './graphql.models.js';
-import { BackendClient } from './backend.client.js';
+// src/modules/users.resolver.ts
+import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { BackendClient, ApiOk } from './backend.client.js';
+import { RoleGql, UserGql } from './graphql.models.js';
 
-function unwrap<T>(r: any): T {
-  return (r && typeof r === 'object' && 'data' in r) ? (r.data as T) : (r as T);
-}
-
-@Resolver(() => User)
+@Resolver()
 export class UsersResolver {
-  @Query(() => [User])
-  async users(
-      @Context('req') req: Request,
-      @Context('res') res: Response,
-  ): Promise<User[]> {
-    const client = new BackendClient(req, res);
-    const resp: any = await client.listUsers();
-    return unwrap<User[]>(resp) ?? [];
+  constructor(private readonly backend: BackendClient) {}
+
+  @Query(() => [String]) // replace with your actual GQL type if needed
+  async listUsers(): Promise<string[]> {
+    const r = await this.backend.get<ApiOk<UserGql[]>>('/users');
+    return r.data.map((u: UserGql) => u.id); // [FIX] no implicit any
   }
 
-  @Mutation(() => User)
+  @Mutation(() => String)
   async createUser(
-      @Args('input') input: CreateUserInput,
-      @Context('req') req: Request,
-      @Context('res') res: Response,
-  ): Promise<User> {
-    const client = new BackendClient(req, res);
-    const resp: any = await client.createUser(input);
-    return unwrap<User>(resp);
+      @Args('email') email: string,
+      @Args('password') password: string,
+      @Args('name', { nullable: true }) name?: string,
+      @Args('handle', { nullable: true }) handle?: string
+  ): Promise<string> {
+    const r = await this.backend.post<ApiOk<UserGql>>('/users', {
+      email,
+      password,
+      name: name ?? null,
+      handle: handle ? handle.trim().toLowerCase() : null,
+      role: RoleGql.USER, // optional
+    });
+    return r.data.id;
   }
 }

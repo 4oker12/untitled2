@@ -1,10 +1,12 @@
-generator client {
-  provider = "prisma-client-js"
-}
+// prisma/schema.prisma
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
 }
 
 enum Role {
@@ -12,24 +14,54 @@ enum Role {
   USER
 }
 
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}
+
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String
-  name          String?
-  role          Role           @default(USER)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  refreshTokens RefreshToken[]
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         Role     @default(USER)
+  handle       String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // relations
+  sentRequests     FriendRequest[] @relation("fromUser")
+  receivedRequests FriendRequest[] @relation("toUser")
+
+  refreshTokens RefreshToken[] // [ADDED] обратная сторона связи с RefreshToken
 }
 
 model RefreshToken {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
   userId    String
   jti       String   @unique
   tokenHash String
   expiresAt DateTime
   revoked   Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict) // [CHANGED] связь остаётся, теперь есть бэкраRelation
+}
+
+model FriendRequest {
+  id        String              @id @default(cuid())
+  fromId    String
+  toId      String
+  status    FriendRequestStatus @default(PENDING)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  from User @relation("fromUser", fields: [fromId], references: [id], onDelete: Restrict)
+  to   User @relation("toUser", fields: [toId], references: [id], onDelete: Restrict)
+
+  @@unique([fromId, toId])
+  @@index([toId])
+  @@index([fromId])
 }

@@ -11,6 +11,7 @@
     "app/shared/types"
   ],
   "scripts": {
+    "dev:frontend": "vite",
     "dev": "concurrently -n BFF,BACKEND,FRONT \"pnpm --filter @app/bff dev\" \"pnpm --filter @app/backend dev\" \"pnpm --filter @app/frontend dev\"",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
