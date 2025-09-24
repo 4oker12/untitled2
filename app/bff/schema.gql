@@ -2,50 +2,11 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type User {
-  id: ID!
-  email: String!
-  name: String
-  role: Role!
-}
-
-enum Role {
-  ADMIN
-  USER
-}
-
-type AuthPayload {
-  user: User!
-}
-
 type Query {
-  hello: String!
-  me: User!
-  users: [User!]!
+  health: String!
+  ping: String!
 }
 
 type Mutation {
-  register(input: RegisterInput!): AuthPayload!
-  login(input: LoginInput!): AuthPayload!
-  refresh: AuthPayload!
-  logout: Boolean!
-  createUser(input: CreateUserInput!): User!
-}
-
-input RegisterInput {
-  email: String!
-  password: String!
-  name: String
-}
-
-input LoginInput {
-  email: String!
-  password: String!
-}
-
-input CreateUserInput {
-  email: String!
-  password: String!
-  name: String
-  role: Role!
+  debugEcho(payload: String!): String!
 }
