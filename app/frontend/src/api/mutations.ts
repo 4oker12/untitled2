@@ -2,25 +2,50 @@ import { gql } from '@apollo/client';
 
 export const REGISTER = gql`
   mutation Register($input: RegisterInput!) {
-    register(input: $input) { user { id email name role } }
+    register(input: $input) {
+      id
+      email
+      name
+      role
+      handle
+    }
   }
 `;
 
 export const LOGIN = gql`
   mutation Login($input: LoginInput!) {
-    login(input: $input) { user { id email name role } }
-  }
-`;
-
-export const REFRESH = gql`
-  mutation Refresh {
-    refresh { user { id email name role } }
+    login(input: $input) {
+      accessToken
+      refreshToken
+      user {
+        id
+        email
+        name
+        role
+        handle
+      }
+    }
   }
 `;
 
 export const LOGOUT = gql`
   mutation Logout {
     logout
+  }
+`;
+
+export const REFRESH = gql`
+  mutation Refresh {
+    refresh {
+      accessToken
+      user {
+        id
+        email
+        name
+        role
+        handle
+      }
+    }
   }
 `;
 

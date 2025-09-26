@@ -7,23 +7,14 @@ export class DebugResolver {
         return 'pong';
     }
 
-    // вернём всё как строку JSON, чтобы не заморачиваться с скалярами
     @Mutation(() => String)
-    debugEcho(
-        @Args('payload', { type: () => String }) payload: string,
-        @Context() ctx: any,
-    ): string {
-        // на всякий залогируем на сервере
+    debugEcho(@Args('payload') payload: string, @Context() ctx: any): string {
         console.log('DEBUG payload:', payload);
         console.log('DEBUG req.body:', ctx?.req?.body);
         console.log('DEBUG headers:', ctx?.req?.headers);
 
         return JSON.stringify(
-            {
-                receivedPayload: payload,
-                body: ctx?.req?.body,
-                headers: ctx?.req?.headers,
-            },
+            { receivedPayload: payload, body: ctx?.req?.body, headers: ctx?.req?.headers },
             null,
             2
         );

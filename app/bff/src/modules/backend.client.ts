@@ -1,94 +1,88 @@
-// src/modules/backend.client.ts
-// Typed fetch client for backend (Node >=18).
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+  Injectable,
+} from '@nestjs/common';
 
-export type ApiOk<T> = { data: T };
-export type ApiErr = { error: { code: string; message?: string } | null; data: null };
+export type ApiOk<T> = { ok: true; data: T };
 
+@Injectable()
 export class BackendClient {
-  constructor(
-      private readonly baseUrl: string,
-      private readonly getAuthHeaders: () => Record<string, string> | Promise<Record<string, string>> = () => ({})
-  ) {}
+  private readonly base: string;
 
-  async get<T>(path: string, init?: RequestInit): Promise<T> {
-    const headers = await this.mergeHeaders(init);
-    const res = await fetch(this.baseUrl + path, { method: 'GET', headers, ...init });
-    return this.parse<T>(res);
+  constructor() {
+    this.base =
+        process.env.BACKEND_URL ||
+        process.env.API_URL ||
+        process.env.BACKEND_API_URL ||
+        'http://localhost:5000';
+
+    if (!/^https?:\/\//.test(this.base)) {
+      throw new Error(`Invalid BACKEND_URL: "${this.base}"`);
+    }
   }
 
-  async post<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-    const headers = await this.mergeHeaders(init, { 'Content-Type': 'application/json' });
-    const res = await fetch(this.baseUrl + path, {
+  private buildUrl(path: string) {
+    const p = path.startsWith('/') ? path : `/${path}`;
+    return new URL(p, this.base).toString();
+  }
+
+  private async parse(res: Response) {
+    const ct = res.headers.get('content-type') || '';
+    const isJson = ct.includes('application/json');
+    return isJson ? await res.json() : await res.text();
+  }
+
+  private throwHttp(res: Response, data: any): never {
+    const message =
+        (typeof data === 'object' && (data?.message || data?.error?.code)) ||
+        (typeof data === 'string' ? data : JSON.stringify(data)) ||
+        res.statusText;
+
+    switch (res.status) {
+      case 400:
+        throw new BadRequestException(message);
+      case 401:
+        throw new UnauthorizedException(message);
+      case 403:
+        throw new ForbiddenException(message);
+      case 404:
+        throw new NotFoundException(message);
+      case 409:
+        throw new ConflictException(message);
+      default:
+        throw new InternalServerErrorException(message);
+    }
+  }
+
+  async get<T>(path: string, init?: RequestInit): Promise<ApiOk<T>> {
+    const res = await fetch(this.buildUrl(path), { method: 'GET', ...(init || {}) });
+    const data = await this.parse(res);
+    if (!res.ok) this.throwHttp(res, data);
+    return { ok: true, data: data as T };
+  }
+
+  async post<T>(path: string, body?: any, init?: RequestInit): Promise<ApiOk<T>> {
+    const headers = { 'content-type': 'application/json', ...(init?.headers || {}) };
+    const res = await fetch(this.buildUrl(path), {
       method: 'POST',
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      ...init,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...(init || {}),
     });
-    return this.parse<T>(res);
+    const data = await this.parse(res);
+    if (!res.ok) this.throwHttp(res, data);
+    return { ok: true, data: data as T };
   }
 
-  async delete<T>(path: string, init?: RequestInit): Promise<T> {
-    const headers = await this.mergeHeaders(init);
-    const res = await fetch(this.baseUrl + path, { method: 'DELETE', headers, ...init });
-    return this.parse<T>(res);
-  }
-
-  // --- raw POST (нужен для Set-Cookie) ---
-  async postRaw(
-      path: string,
-      body?: unknown,
-      init?: RequestInit
-  ): Promise<{ json: unknown; cookies: string[]; status: number }> {
-    const headers = await this.mergeHeaders(init, { 'Content-Type': 'application/json' });
-    const res = await fetch(this.baseUrl + path, {
-      method: 'POST',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      ...init,
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : null;
-
-    // собрать Set-Cookie (node-fetch vs undici)
-    const anyHeaders: any = res.headers as any;
-    const raw = typeof anyHeaders?.raw === 'function' ? anyHeaders.raw() : undefined;
-    const cookies: string[] =
-        (raw && raw['set-cookie']) ??
-        (res.headers.get('set-cookie') ? [res.headers.get('set-cookie') as string] : []);
-
-    if (!res.ok) {
-      const bodySnippet =
-          json && typeof json === 'object'
-              ? JSON.stringify(json)
-              : (typeof json === 'string' ? json : '');
-      const err: any = new Error(`Backend error ${res.status}${bodySnippet ? `: ${bodySnippet}` : ''}`);
-      err.status = res.status;
-      err.body = json;
-      throw err;
-    }
-    return { json, cookies, status: res.status };
-  }
-
-  // ---- helpers ----
-  private async mergeHeaders(init?: RequestInit, extra?: Record<string, string>): Promise<Record<string, string>> {
-    const auth = await Promise.resolve(this.getAuthHeaders());
-    return { ...(extra ?? {}), ...(init?.headers as Record<string, string> | undefined ?? {}), ...auth };
-  }
-
-  private async parse<T>(res: Response): Promise<T> {
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : null;
-    if (!res.ok) {
-      const bodySnippet =
-          json && typeof json === 'object'
-              ? JSON.stringify(json)
-              : (typeof json === 'string' ? json : '');
-      const err: any = new Error(`Backend error ${res.status}${bodySnippet ? `: ${bodySnippet}` : ''}`);
-      err.status = res.status;
-      err.body = json;
-      throw err;
-    }
-    return json as T;
+  async delete<T>(path: string, init?: RequestInit): Promise<ApiOk<T>> {
+    const res = await fetch(this.buildUrl(path), { method: 'DELETE', ...(init || {}) });
+    const data = await this.parse(res);
+    if (!res.ok) this.throwHttp(res, data);
+    return { ok: true, data: data as T };
   }
 }

@@ -11,7 +11,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   login: (input: { email: string; password: string }) => Promise<void>;
-  register: (input: { email: string; password: string; name?: string }) => Promise<void>;
+  register: (input: { email: string; password: string; name: string | undefined; handle: string }) => Promise<void>;
   logout: () => Promise<void>;
   refetchMe: () => Promise<void>;
 }
@@ -82,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadMe();
   }, [loadMe]);
 
+  // login: ожидает input { email, password }
   const login = useCallback(async (input: { email: string; password: string }) => {
     setError(null);
     const res = await mutateLogin({ variables: { input } });
@@ -90,13 +91,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [mutateLogin]);
 
-  const register = useCallback(async (input: { email: string; password: string; name?: string }) => {
+// register: ДОБАВИЛИ handle и берём user из res.data.register (BFF возвращает сам объект User)
+  const register = useCallback(async (input: { email: string; password: string; name?: string; handle: string }) => {
     setError(null);
     const res = await mutateRegister({ variables: { input } });
-    if (res.data?.register?.user) {
-      setUser(res.data.register.user);
+    if (res.data?.register) {
+      setUser(res.data.register);
     }
   }, [mutateRegister]);
+
+
 
   const logout = useCallback(async () => {
     setError(null);

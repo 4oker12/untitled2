@@ -1,32 +1,24 @@
-// src/modules/users.resolver.ts
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { BackendClient, ApiOk } from './backend.client.js';
-import { RoleGql, UserGql } from './graphql.models.js';
+// [CHANGED] убрали .js и дженерики-матрёшки
+import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { BackendClient, ApiOk } from './backend.client';
+import { UserGql } from './graphql.models';
 
 @Resolver()
 export class UsersResolver {
   constructor(private readonly backend: BackendClient) {}
 
-  @Query(() => [String]) // replace with your actual GQL type if needed
-  async listUsers(): Promise<string[]> {
-    const r = await this.backend.get<ApiOk<UserGql[]>>('/users');
-    return r.data.map((u: UserGql) => u.id); // [FIX] no implicit any
+  @Query(() => [String])
+  async userIds(): Promise<string[]> {
+    const r: ApiOk<UserGql[]> = await this.backend.get<UserGql[]>('/users');
+    return r.data.map((u) => String(u.id));
   }
 
   @Mutation(() => String)
   async createUser(
       @Args('email') email: string,
-      @Args('password') password: string,
-      @Args('name', { nullable: true }) name?: string,
-      @Args('handle', { nullable: true }) handle?: string
+      @Args('name', { nullable: true }) name?: string
   ): Promise<string> {
-    const r = await this.backend.post<ApiOk<UserGql>>('/users', {
-      email,
-      password,
-      name: name ?? null,
-      handle: handle ? handle.trim().toLowerCase() : null,
-      role: RoleGql.USER, // optional
-    });
-    return r.data.id;
+    const r: ApiOk<UserGql> = await this.backend.post<UserGql>('/users', { email, name });
+    return String(r.data.id);
   }
 }

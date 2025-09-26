@@ -3,47 +3,95 @@ import { useNavigate, Link } from 'react-router-dom';
 import { FormField } from '../components/FormField';
 import { useAuth } from '../auth/AuthProvider';
 
-export const RegisterPage: React.FC = () => {
-  const { register } = useAuth();
+const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<{ email?: string; password?: string; confirm?: string; server?: string }>({});
-  const [loading, setLoading] = useState(false);
+  const [handle, setHandle] = useState('');  // обязателен
+  const [name, setName] = useState('');      // опционально
+  const [errors, setErrors] = useState<{ email?: string; password?: string; handle?: string; server?: string }>({});
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: typeof errors = {};
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Invalid email';
-    if (password.length < 8) errs.password = 'Password must be at least 8 characters';
-    if (confirm !== password) errs.confirm = 'Passwords do not match';
+
+    const trimmedEmail = email.trim();
+    const trimmedHandle = handle.trim();
+    const trimmedName = name.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) errs.email = 'Invalid email';
+    if (password.length < 6) errs.password = 'Password must be at least 6 characters';
+    if (!trimmedHandle || trimmedHandle.length < 3) errs.handle = 'Handle must be at least 3 characters';
+
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    setLoading(true);
+
     try {
-      await register({ email, password, name: name || undefined });
-      navigate('/dashboard');
+      await register({
+        email: trimmedEmail,
+        password,
+        name: trimmedName ? trimmedName : undefined,
+        handle: trimmedHandle,
+      });
+      navigate('/dashboard', { replace: true });
     } catch (e: any) {
       setErrors({ server: e?.message || 'Registration failed' });
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto p-6">
-      <h1 className="text-2xl font-semibold mb-4">Register</h1>
-      {errors.server && <div className="mb-3 text-red-600">{errors.server}</div>}
-      <form onSubmit={onSubmit} className="bg-white rounded border p-4">
-        <FormField label="Email" type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />
-        <FormField label="Name" type="text" name="name" value={name} onChange={(e) => setName(e.target.value)} />
-        <FormField label="Password" type="password" name="password" value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password} />
-        <FormField label="Confirm Password" type="password" name="confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)} error={errors.confirm} />
-        <button disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50">{loading ? 'Creating account...' : 'Create account'}</button>
-      </form>
-      <p className="mt-3 text-sm">Already have an account? <Link className="text-blue-600" to="/login">Login</Link></p>
-    </div>
+      <div className="max-w-md mx-auto p-6">
+        <h1 className="text-2xl font-semibold mb-4">Register</h1>
+        {errors.server && <div className="mb-3 text-red-600">{errors.server}</div>}
+
+        <form onSubmit={onSubmit} className="bg-white rounded border p-4">
+          <FormField
+              label="Handle"
+              name="handle"
+              type="text"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+              error={errors.handle}
+              placeholder="e.g. aurelio"
+          />
+          <FormField
+              label="Name"
+              name="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+          />
+          <FormField
+              label="Email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+              placeholder="you@example.com"
+          />
+          <FormField
+              label="Password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
+              placeholder="At least 6 characters"
+          />
+
+          <button className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50">
+            Sign up
+          </button>
+        </form>
+
+        <p className="mt-3 text-sm">
+          Already have an account? <Link className="text-blue-600" to="/login">Login</Link>
+        </p>
+      </div>
   );
 };
+
+export default RegisterPage;

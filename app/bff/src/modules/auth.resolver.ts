@@ -1,84 +1,89 @@
-// src/modules/auth.resolver.ts
-import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
-import type { Response } from 'express';
-import { BackendClient, ApiOk } from './backend.client.js';
-import { LoginInput, RegisterInput, UserGql } from './graphql.models.js';
+// app/bff/src/modules/auth.resolver.ts
+import { Resolver, Mutation, Args, Query, Context } from '@nestjs/graphql'; // [CHANGED] добавил Query, Context
+import { InternalServerErrorException } from '@nestjs/common';
+import { BackendClient } from './backend.client';
+import { RegisterInput, LoginInput, UserGql, AuthPayloadGql } from './graphql.models';
+
+function pickUser(raw: any): any | null {
+  if (!raw) return null;
+  const body = raw?.data ?? raw; // поддержка ApiOk<T> и «сырых» форм
+
+  if (body?.user) return body.user;                     // { user: {...} }
+  if (body?.data?.user) return body.data.user;          // { data: { user: {...} } }
+  if (body?.data && (body.data.id || body.data.email)) return body.data; // { data: {...} }
+  if (body?.id || body?.email) return body;             // плоский объект
+  return null;
+}
+
+function toUserGql(u: any): UserGql {
+  return {
+    id: String(u.id ?? u._id),
+    email: u.email ?? '',
+    name: u.name ?? null,
+    role: (u.role as any) ?? null,
+    handle: u.handle ?? null,
+  };
+}
 
 @Resolver()
 export class AuthResolver {
   constructor(private readonly backend: BackendClient) {}
 
-  @Mutation(() => String)
-  async register(
-      @Args('input', { type: () => RegisterInput }) input: RegisterInput,
-      @Context() ctx: { res: Response }
-  ): Promise<string> {
-    try {
-      const { json, cookies } = await this.backend.postRaw('/auth/register', input);
-      if (cookies.length) ctx.res.setHeader('set-cookie', cookies);
-      const r = json as ApiOk<{ user: UserGql }>;
-      return r.data.user.id;
-    } catch (e: any) {
-      // отдаём понятный текст с телом ответа бэкенда
-      const msg =
-          e?.body?.error?.code ??
-          e?.body?.message ??
-          (typeof e?.body === 'object' ? JSON.stringify(e.body) : e?.message);
-      throw new Error(`REGISTER_FAILED: ${msg}`);
+  @Mutation(() => UserGql)
+  async register(@Args('input') input: RegisterInput): Promise<UserGql> {
+    const resp: any = await this.backend.post<any>('/auth/register', input);
+    const u = pickUser(resp);
+
+    if (!u || (u.id ?? u._id) == null) {
+      throw new InternalServerErrorException(
+          `Backend did not return user.id (got: ${JSON.stringify(resp)})`
+      );
     }
+
+    return toUserGql(u);
   }
 
-  @Mutation(() => String)
-  async login(
-      @Args('input', { type: () => LoginInput }) input: LoginInput,
-      @Context() ctx: { res: Response }
-  ): Promise<string> {
-    try {
-      const { json, cookies } = await this.backend.postRaw('/auth/login', input);
-      if (cookies.length) ctx.res.setHeader('set-cookie', cookies);
-      const r = json as ApiOk<{ user: UserGql }>;
-      return r.data.user.id;
-    } catch (e: any) {
-      const msg =
-          e?.body?.error?.code ??
-          e?.body?.message ??
-          (typeof e?.body === 'object' ? JSON.stringify(e.body) : e?.message);
-      throw new Error(`LOGIN_FAILED: ${msg}`);
-    }
+  // [CHANGED] login больше НЕ требует accessToken — возвращаем то, что есть
+  @Mutation(() => AuthPayloadGql)
+  async login(@Args('input') input: LoginInput, @Context() ctx: any): Promise<AuthPayloadGql> {
+    const resp: any = await this.backend.post<any>('/auth/login', input);
+    const body = resp?.data ?? resp;
+
+    // Пробуем найти токены, если backend их отдаёт
+    const accessToken =
+        body?.accessToken ?? body?.token ?? body?.data?.accessToken ?? body?.data?.token ?? null;
+    const refreshToken =
+        body?.refreshToken ?? body?.data?.refreshToken ?? null;
+
+    // Если backend использует cookie-сессии, тут можно было бы прокинуть Set-Cookie.
+    // Наш BackendClient сейчас не возвращает заголовки — поэтому пока просто возвращаем user.
+    const u = pickUser(body);
+
+    return {
+      accessToken: accessToken ? String(accessToken) : null,
+      refreshToken: refreshToken ? String(refreshToken) : null,
+      user: u ? toUserGql(u) : null,
+    };
   }
 
-  @Mutation(() => Boolean)
-  async refresh(@Context() ctx: { res: Response }): Promise<boolean> {
-    try {
-      const { cookies } = await this.backend.postRaw('/auth/refresh');
-      if (cookies.length) ctx.res.setHeader('set-cookie', cookies);
-      return true;
-    } catch (e: any) {
-      const msg =
-          e?.body?.error?.code ??
-          e?.body?.message ??
-          (typeof e?.body === 'object' ? JSON.stringify(e.body) : e?.message);
-      throw new Error(`REFRESH_FAILED: ${msg}`);
-    }
-  }
+  // [ADDED] me: текущий пользователь (по Authorization/cookie)
+  @Query(() => UserGql, { nullable: true })
+  async me(@Context() ctx: any): Promise<UserGql | null> {
+    const auth = ctx?.req?.headers?.authorization as string | undefined;
+    const cookie = ctx?.req?.headers?.cookie as string | undefined;
+    const headers: Record<string, string> = {};
+    if (auth) headers['authorization'] = auth;
+    if (cookie) headers['cookie'] = cookie;
 
-  @Mutation(() => Boolean)
-  async logout(@Context() ctx: { res: Response }): Promise<boolean> {
     try {
-      const { cookies } = await this.backend.postRaw('/auth/logout');
-      if (cookies.length) ctx.res.setHeader('set-cookie', cookies);
-      return true;
+      const r: any = await this.backend.get<any>('/auth/me', { headers });
+      const body = r?.data ?? r;
+      const u = pickUser(body);
+      return u ? toUserGql(u) : null;
     } catch (e: any) {
-      const msg =
-          e?.body?.error?.code ??
-          e?.body?.message ??
-          (typeof e?.body === 'object' ? JSON.stringify(e.body) : e?.message);
-      throw new Error(`LOGOUT_FAILED: ${msg}`);
+      // Если неавторизован — вернём null (ожидаемо для фронта)
+      if (typeof e?.getStatus === 'function' && e.getStatus() === 401) return null;
+      return null; // можно и пробросить, но фронту удобнее получить null
     }
-  }
-
-  @Query(() => String, { nullable: true })
-  async me(): Promise<string | null> {
-    return null;
   }
 }

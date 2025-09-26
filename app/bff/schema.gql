@@ -2,11 +2,70 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type User {
+  id: ID!
+  email: String!
+  name: String
+  role: Role
+  handle: String
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+type AuthPayload {
+  accessToken: String
+  refreshToken: String
+  user: User
+}
+
+type FriendRequest {
+  id: ID!
+  from: User
+  to: User
+  status: FriendRequestStatus
+  createdAt: String
+  updatedAt: String
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}
+
 type Query {
   health: String!
   ping: String!
+  me: User
+  friendsSvc: [User!]!
+  friendRequests(direction: String): [FriendRequest!]!
+  searchUsers(q: String!): [User!]!
 }
 
 type Mutation {
+  noop: String!
   debugEcho(payload: String!): String!
+  register(input: RegisterInput!): User!
+  login(input: LoginInput!): AuthPayload!
+  requestFriend(userId: String!): FriendRequest!
+  acceptFriendRequest(id: String!): FriendRequest!
+  declineFriendRequest(id: String!): FriendRequest!
+  cancelFriendRequest(id: String!): FriendRequest!
+  removeFriend(userId: String!): Boolean!
+}
+
+input RegisterInput {
+  email: String!
+  password: String!
+  name: String
+  handle: String
+}
+
+input LoginInput {
+  email: String!
+  password: String!
 }

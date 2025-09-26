@@ -1,75 +1,78 @@
-// src/modules/friends.service.ts
-import { Injectable } from '@nestjs/common';
-import { BackendClient, ApiOk } from './backend.client.js';
+// [CHANGED] убрали .js из импорта и выровняли generics
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { BackendClient, ApiOk } from './backend.client';
 
-export type FriendRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELED';
-
-export interface PublicUserDto {
-  id: string;
-  handle: string | null;
-  name: string | null;
-  email?: string | null;
-}
-
-export interface FriendRequestDto {
-  id: string;
-  fromId: string;
-  toId: string;
-  status: FriendRequestStatus;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface SendFriendRequestDto {
-  toHandle: string;
-}
-
-function ok<T>(data: T) {
-  return { data };
-}
+import {PublicUserDto, FriendRequestDto} from "./friends.dto";
 
 @Injectable()
 export class FriendsService {
   constructor(private readonly backend: BackendClient) {}
 
-  async listFriends() {
-    const r = await this.backend.get<ApiOk<PublicUserDto[]>>('/friends');
-    return ok(r.data);
+  async listFriends(): Promise<PublicUserDto[]> {
+    const r: ApiOk<PublicUserDto[]> = await this.backend.get<PublicUserDto[]>('/friends');
+    return r.data;
   }
 
-  async listRequests(type?: 'incoming' | 'outgoing') {
-    const query = type ? `?type=${encodeURIComponent(type)}` : '';
-    const r = await this.backend.get<ApiOk<FriendRequestDto[]>>(`/friends/requests${query}`);
-    return ok(r.data);
+  async listRequests(direction?: 'incoming' | 'outgoing'): Promise<FriendRequestDto[]> {
+    const query = direction ? `?direction=${encodeURIComponent(direction)}` : '';
+    const r: ApiOk<FriendRequestDto[]> =
+        await this.backend.get<FriendRequestDto[]>(`/friends/requests${query}`);
+    return r.data;
   }
 
-  async sendRequest(body: SendFriendRequestDto) {
-    const r = await this.backend.post<ApiOk<FriendRequestDto>>('/friends/requests', body);
-    return ok(r.data);
+  async requestFriend(userId: string): Promise<FriendRequestDto> {
+    const body = { userId };
+    const r: ApiOk<FriendRequestDto> =
+        await this.backend.post<FriendRequestDto>('/friends/requests', body);
+    return r.data;
   }
 
-  async acceptRequest(id: string) {
-    const r = await this.backend.post<ApiOk<FriendRequestDto>>(`/friends/requests/${encodeURIComponent(id)}/accept`);
-    return ok(r.data);
+  async acceptRequest(id: string): Promise<FriendRequestDto> {
+    const r: ApiOk<FriendRequestDto> =
+        await this.backend.post<FriendRequestDto>(`/friends/requests/${encodeURIComponent(id)}/accept`);
+    return r.data;
   }
 
-  async declineRequest(id: string) {
-    const r = await this.backend.post<ApiOk<FriendRequestDto>>(`/friends/requests/${encodeURIComponent(id)}/decline`);
-    return ok(r.data);
+  async declineRequest(id: string): Promise<FriendRequestDto> {
+    const r: ApiOk<FriendRequestDto> =
+        await this.backend.post<FriendRequestDto>(`/friends/requests/${encodeURIComponent(id)}/decline`);
+    return r.data;
   }
 
-  async cancelRequest(id: string) {
-    const r = await this.backend.post<ApiOk<FriendRequestDto>>(`/friends/requests/${encodeURIComponent(id)}/cancel`);
-    return ok(r.data);
+  async cancelRequest(id: string): Promise<FriendRequestDto> {
+    const r: ApiOk<FriendRequestDto> =
+        await this.backend.post<FriendRequestDto>(`/friends/requests/${encodeURIComponent(id)}/cancel`);
+    return r.data;
   }
 
-  async removeFriend(userId: string) {
-    const r = await this.backend.delete<ApiOk<boolean>>(`/friends/${encodeURIComponent(userId)}`);
-    return ok(r.data);
+  async removeFriend(userId: string): Promise<boolean> {
+    const r: ApiOk<boolean> =
+        await this.backend.delete<boolean>(`/friends/${encodeURIComponent(userId)}`);
+    return r.data;
   }
 
-  async searchUsers(q: string) {
-    const r = await this.backend.get<ApiOk<PublicUserDto[]>>(`/users?search=${encodeURIComponent(q)}`);
-    return ok(r.data);
+  async searchUsers(q: string): Promise<PublicUserDto[]> {
+    const r: ApiOk<PublicUserDto[]> =
+        await this.backend.get<PublicUserDto[]>(`/users?search=${encodeURIComponent(q)}`);
+    return r.data;
   }
+
+  async sendRequest(params: { userId?: string; toHandle?: string }): Promise<FriendRequestDto> {
+        const { userId, toHandle } = params || {};
+       if (userId) {
+            return this.requestFriend(userId);
+          }
+        if (toHandle) {
+            // Пытаемся найти пользователя по handle и отправить заявку
+               const r: ApiOk<PublicUserDto[]> =
+                  await this.backend.get<PublicUserDto[]>(`/users?search=${encodeURIComponent(toHandle)}`);
+            const candidate =
+                  r.data.find(u => (u.handle ?? '').toLowerCase() === toHandle.toLowerCase()) ?? r.data[0];
+            if (!candidate?.id) {
+                throw new BadRequestException('User not found by handle');
+              }
+            return this.requestFriend(String(candidate.id));
+          }
+        throw new BadRequestException('Either userId or toHandle must be provided');
+      }
 }
