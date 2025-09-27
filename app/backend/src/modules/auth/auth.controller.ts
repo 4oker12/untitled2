@@ -4,11 +4,11 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { UsersService } from '../users/users.service.js';
 import { UserDto } from '../users/dto.js';
-// ↓↓↓ Больше НЕ импортируем zod
-// import { LoginSchema, RegisterSchema } from './dto.js';
-
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { RegisterDto, LoginDto, Role } from './dto.js';
+import { RegisterDto, LoginDto } from './dto.js';
+// [ADDED]
+import { setAuthCookies, clearAuthCookies } from '../../common/cookies.js';
+import { ConfigService } from '../config/config.service.js';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -16,6 +16,8 @@ export class AuthController {
   constructor(
       private readonly auth: AuthService,
       private readonly users: UsersService,
+      // [ADDED]
+      private readonly config: ConfigService,
   ) {}
 
   @Post('register')
@@ -63,24 +65,60 @@ export class AuthController {
     const ok = await this.auth.comparePassword(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS' }, data: null });
 
-    // TODO: выставь куки/токены как у тебя реализовано (access/refresh)
-    // [CHANGED] вернём handle
-    return res.json({ data: { user: { id: user.id, email: user.email, name: user.name, role: user.role, handle: user.handle } } });
+    // [ADDED] выдаём токены и ставим httpOnly cookies
+    const accessToken  = this.auth.issueAccessToken(user.id, user.role);
+    const refreshToken = this.auth.issueRefreshToken(user.id, user.role);
+    setAuthCookies(res, { access: accessToken, refresh: refreshToken, isProd: this.config.secureCookies });
+
+    // [ADDED] вернём токены и user в теле ответа (удобно для Playground)
+    return res.json({
+      data: {
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, handle: user.handle },
+        accessToken,
+        refreshToken,
+      },
+    });
+  }
+
+  // [ADDED] Текущий пользователь по access токену
+  @Get('me')
+  @HttpCode(200)
+  @ApiCookieAuth('access_token')
+  async me(@Req() req: Request, @Res() res: Response) {
+    // Берём из Authorization: Bearer <token> или из cookie access_token
+    const authHeader = req.header('authorization') ?? '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : null;
+    const cookieToken = (req as any).cookies?.['access_token'] as string | undefined;
+    const token = bearer || cookieToken;
+    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+
+    try {
+      const payload = this.auth.verifyAccessToken(token);
+      const user = await this.users.findById(payload.sub);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+      return res.json({
+        data: { user: { id: user.id, email: user.email, name: user.name, role: user.role, handle: user.handle } },
+      });
+    } catch {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
   }
 
   @Post('refresh')
   @HttpCode(200)
   @ApiCookieAuth('access_token')
   async refresh(@Req() req: Request, @Res() res: Response) {
-    // твоя реализация refresh
-    return res.json({ data: { ok: true} });
+    // TODO: твоя реализация refresh при необходимости
+    return res.json({ data: { ok: true } });
   }
 
   @Post('logout')
   @HttpCode(200)
   @ApiCookieAuth('access_token')
   async logout(@Res() res: Response) {
-    // твоя реализация logout
+    // [ADDED] подчистим cookies
+    clearAuthCookies(res, this.config.secureCookies);
     return res.json({ data: true });
   }
 }

@@ -1,74 +1,72 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Req } from '@nestjs/common';
+// [NEW] app/backend/src/modules/friends/friends.controller.ts
+import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FriendsService } from './friends.service.js';
-import { SendFriendRequestDto, IdParamDto, ListRequestsQueryDto, FriendRequestDto, FriendUserDto } from './dto.js';
+import { CreateFriendRequestDto, FriendRequestDto, PublicUserDto } from './friends.dto.js';
 
 @ApiTags('friends')
 @ApiCookieAuth('access_token')
 @Controller('friends')
 export class FriendsController {
-    constructor(private readonly friends: FriendsService) {}
+    constructor(private readonly service: FriendsService) {}
 
-    /** Список друзей */
     @Get()
-    @ApiResponse({ status: 200, type: [FriendUserDto] })
-    async list(@Req() req: Request) {
-        const me = (req as any).user; // предполагается, что ты вешал user в req (auth middleware/guard)
-        const data = await this.friends.listFriends(me.id);
+    @ApiResponse({ status: 200 })
+    async listFriends(@Req() req: Request): Promise<{ data: PublicUserDto[] }> {
+        const data = await this.service.listFriends(req);
         return { data };
     }
 
-    /** Отправить заявку в друзья */
-    @Post('requests')
-    @ApiResponse({ status: 201, type: FriendRequestDto })
-    async send(@Req() req: Request, @Body() body: SendFriendRequestDto) {
-        const me = (req as any).user;
-        const fr = await this.friends.sendRequest(me.id, body.toHandle);
-        return { data: fr };
-    }
-
-    /** Список заявок (incoming/outgoing) */
     @Get('requests')
-    @ApiResponse({ status: 200, type: [FriendRequestDto] })
-    async requests(@Req() req: Request, @Query() query: ListRequestsQueryDto) {
-        const me = (req as any).user;
-        const data = await this.friends.listRequests(me.id, query.type);
+    @ApiResponse({ status: 200 })
+    async listRequests(
+        @Req() req: Request,
+        @Query('type') type?: 'incoming' | 'outgoing',
+    ): Promise<{ data: FriendRequestDto[] }> {
+        const data = await this.service.listRequests(req, type);
         return { data };
     }
 
-    /** Принять заявку */
+    @Post('requests')
+    @ApiResponse({ status: 201 })
+    async createRequest(@Req() req: Request, @Body() body: CreateFriendRequestDto): Promise<{ data: FriendRequestDto }> {
+        const data = await this.service.createRequest(req, body);
+        return { data };
+    }
+
     @Post('requests/:id/accept')
-    @ApiResponse({ status: 200, type: FriendRequestDto })
-    async accept(@Req() req: Request, @Param() p: IdParamDto) {
-        const me = (req as any).user;
-        const fr = await this.friends.acceptRequest(me.id, p.id);
-        return { data: fr };
+    @ApiResponse({ status: 200 })
+    async accept(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
+        const data = await this.service.accept(req, id);
+        return { data };
     }
 
-    /** Отклонить заявку */
     @Post('requests/:id/decline')
-    @ApiResponse({ status: 200, type: FriendRequestDto })
-    async decline(@Req() req: Request, @Param() p: IdParamDto) {
-        const me = (req as any).user;
-        const fr = await this.friends.declineRequest(me.id, p.id);
-        return { data: fr };
+    @ApiResponse({ status: 200 })
+    async decline(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
+        const data = await this.service.decline(req, id);
+        return { data };
     }
 
-    /** Отменить исходящую заявку */
     @Post('requests/:id/cancel')
-    @ApiResponse({ status: 200, type: FriendRequestDto })
-    async cancel(@Req() req: Request, @Param() p: IdParamDto) {
-        const me = (req as any).user;
-        const fr = await this.friends.cancelRequest(me.id, p.id);
-        return { data: fr };
+    @ApiResponse({ status: 200 })
+    async cancel(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
+        const data = await this.service.cancel(req, id);
+        return { data };
     }
 
-    /** Удалить друга */
     @Delete(':userId')
-    async remove(@Req() req: Request, @Param('userId') userId: string) {
-        const me = (req as any).user;
-        const res = await this.friends.removeFriend(me.id, userId);
-        return { data: res };
+    @ApiResponse({ status: 200 })
+    async remove(@Req() req: Request, @Param('userId') userId: string): Promise<{ data: boolean }> {
+        return this.service.removeFriend(req, userId);
+    }
+
+    @Get('search/users')
+    @ApiResponse({ status: 200 })
+    async searchUsers(@Query('q') q: string): Promise<{ data: PublicUserDto[] }> {
+        const data = await this.service.searchUsers(q);
+        return { data };
     }
 }
+

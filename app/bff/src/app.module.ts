@@ -1,4 +1,6 @@
-// [CHANGED] добавили FriendsModule в imports
+
+
+// [CHANGED] добавили FriendsModule и context для req/res
 import { Module } from '@nestjs/common';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -17,7 +19,8 @@ import { FriendsModule } from './modules/friends.module'; // [ADDED]
       autoSchemaFile: 'schema.gql',
       path: '/graphql',
       playground: true,
-    }),
+      // [ADDED] даём резолверам доступ к res (для Set-Cookie)
+      context: ({ req, res }: { req: Request; res: Response }) => ({ req, res }),    }),
     BackendModule,
     FriendsModule, // [ADDED]
   ],

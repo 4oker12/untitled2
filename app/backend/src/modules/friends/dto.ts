@@ -1,37 +1,34 @@
-// app/backend/src/modules/friends/dto.ts
+// [NEW] app/backend/src/modules/friends/friends.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
 
-export class FriendUserDto {
+export class PublicUserDto {
     @ApiProperty() id!: string;
-    @ApiProperty() email!: string;
-    @ApiProperty({ nullable: true }) name?: string | null;
-    @ApiProperty({ nullable: true }) handle?: string | null;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() email?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() name?: string | null;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() role?: 'ADMIN' | 'USER' | string | null;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() handle?: string | null;
+}
+
+export enum FriendRequestStatus {
+    PENDING = 'PENDING',
+    ACCEPTED = 'ACCEPTED',
+    DECLINED = 'DECLINED',
+    CANCELED = 'CANCELED',
 }
 
 export class FriendRequestDto {
     @ApiProperty() id!: string;
-    @ApiProperty() fromId!: string;
-    @ApiProperty() toId!: string;
-    @ApiProperty({ enum: ['PENDING', 'ACCEPTED', 'DECLINED'] }) status!: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    @ApiProperty({ type: PublicUserDto, required: false }) @IsOptional() from?: PublicUserDto | null;
+    @ApiProperty({ type: PublicUserDto, required: false }) @IsOptional() to?: PublicUserDto | null;
+    @ApiProperty({ enum: FriendRequestStatus, required: false }) @IsOptional() @IsEnum(FriendRequestStatus) status?: FriendRequestStatus | null;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() createdAt?: string | null;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() updatedAt?: string | null;
 }
 
-export class SendFriendRequestDto {
-    @ApiProperty({ example: 'john_doe' })
+export class CreateFriendRequestDto {
+    @ApiProperty({ example: 'andrii' })
     @IsString()
-    @Length(3, 32)
+    @Length(3)
     toHandle!: string;
-}
-
-export class IdParamDto {
-    @ApiProperty()
-    @IsString()
-    id!: string;
-}
-
-export class ListRequestsQueryDto {
-    @ApiProperty({ required: false, enum: ['incoming', 'outgoing'] })
-    @IsOptional()
-    @IsIn(['incoming', 'outgoing'])
-    type?: 'incoming' | 'outgoing';
 }

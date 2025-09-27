@@ -41,8 +41,7 @@ export class AuthPayloadGql {
   user?: UserGql | null;
 }
 
-
-// [ADDED] Статус заявки в друзья
+// ---- Friends ----
 export enum FriendRequestStatusGql {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
@@ -51,24 +50,19 @@ export enum FriendRequestStatusGql {
 }
 registerEnumType(FriendRequestStatusGql, { name: 'FriendRequestStatus' });
 
-// [ADDED] Модель заявки в друзья
 @ObjectType('FriendRequest')
 export class FriendRequestGql {
   @Field(() => ID) id!: string;
+  @Field(() => UserGql, { nullable: true }) from?: UserGql | null;
+  @Field(() => UserGql, { nullable: true }) to?: UserGql | null;
+  @Field(() => FriendRequestStatusGql, { nullable: true }) status?: FriendRequestStatusGql | null;
+  @Field(() => String, { nullable: true }) createdAt?: string | null;
+  @Field(() => String, { nullable: true }) updatedAt?: string | null;
+}
 
-  @Field(() => UserGql, { nullable: true })
-  from?: UserGql | null;
-
-  @Field(() => UserGql, { nullable: true })
-  to?: UserGql | null;
-
-  @Field(() => FriendRequestStatusGql, { nullable: true })
-  status?: FriendRequestStatusGql | null;
-
-  // оставим строкой, чтобы не тянуть Date scalar
-  @Field(() => String, { nullable: true })
-  createdAt?: string | null;
-
-  @Field(() => String, { nullable: true })
-  updatedAt?: string | null;
+// [ADDED] вход для универсальной мутации
+@InputType('SendFriendRequestInput')
+export class SendFriendRequestInput {
+  @Field(() => String, { nullable: true }) userId?: string;
+  @Field(() => String, { nullable: true }) toHandle?: string;
 }

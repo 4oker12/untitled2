@@ -1,192 +1,244 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaClient, $Enums } from '@prisma/client'; // [ADDED] $Enums для типобезопасных статусов
-
-const prisma = new PrismaClient();
+// [NEW] app/backend/src/modules/friends/friends.service.ts
+import {
+    BadRequestException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { PrismaService } from '../../prisma/prisma.service.js'; // <- у тебя уже должен быть PrismaService
+import { UsersService } from '../users/users.service.js';       // <- используем для поиска юзеров (handle/id)
+import { AuthService } from '../auth/auth.service.js';
+import {
+    CreateFriendRequestDto,
+    FriendRequestDto,
+    FriendRequestStatus,
+    PublicUserDto,
+} from './friends.dto.js';
 
 @Injectable()
 export class FriendsService {
-    /**
-     * Отправить заявку по никнейму (handle).
-     * - нормализуем handle в lowercase
-     * - запрещаем self-request
-     * - если есть встречная PENDING → авто-ACCEPT
-     * - запрещаем дубли
-     */
-    async sendRequest(currentUserId: string, toHandle: string) {
-        const norm = toHandle.trim().toLowerCase(); // [ADDED] нормализация
-        const to = await prisma.user.findUnique({ where: { handle: norm } });
-        if (!to) throw new NotFoundException('User not found');
-        if (to.id === currentUserId) throw new BadRequestException('Cannot friend yourself');
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly users: UsersService,
+        private readonly auth: AuthService,
+    ) {}
 
-        // уже друзья?
-        const already = await prisma.friendRequest.findFirst({
-            where: {
-                status: $Enums.FriendRequestStatus.ACCEPTED, // [CHANGED] enum вместо строки
-                OR: [
-                    { fromId: currentUserId, toId: to.id },
-                    { fromId: to.id, toId: currentUserId },
-                ],
-            },
-        });
-        if (already) throw new BadRequestException('Already friends');
+    // ----- helpers -----
+    private bearerOrCookie(req: Request): string | null {
+        const h = req.header('authorization') ?? '';
+        const bearer = h.startsWith('Bearer ') ? h.slice(7).trim() : null;
+        const cookie = (req as any).cookies?.['access_token'] as string | undefined;
+        return bearer || cookie || null;
+    }
 
-        // исходящая заявка уже есть?
-        const existing = await prisma.friendRequest.findUnique({
-            where: { fromId_toId: { fromId: currentUserId, toId: to.id } },
-        });
-        if (existing) throw new BadRequestException('Request already exists');
+    private async requireCurrentUser(req: Request): Promise<PublicUserDto> {
+        const token = this.bearerOrCookie(req);
+        if (!token) throw new ForbiddenException('Unauthorized');
+        const payload = this.auth.verifyAccessToken(token);
+        const u = await this.users.findById(payload.sub);
+        if (!u) throw new ForbiddenException('Unauthorized');
+        return {
+            id: String(u.id),
+            email: u.email,
+            name: u.name ?? null,
+            role: (u.role ?? 'USER') as any,
+            handle: (u as any).handle ?? null,
+        };
+    }
 
-        // встречная заявка? → auto-accept
-        const reverse = await prisma.friendRequest.findUnique({
-            where: { fromId_toId: { fromId: to.id, toId: currentUserId } },
-        });
-        if (reverse && reverse.status === $Enums.FriendRequestStatus.PENDING) { // [CHANGED]
-            const accepted = await prisma.friendRequest.update({
-                where: { id: reverse.id },
-                data: { status: $Enums.FriendRequestStatus.ACCEPTED }, // [CHANGED] enum
-                include: { from: true, to: true },
-            });
-            return accepted;
-        }
+    private toUserDto(u: any): PublicUserDto {
+        return {
+            id: String(u.id),
+            email: u.email,
+            name: u.name ?? null,
+            role: (u.role ?? 'USER') as any,
+            handle: (u.handle ?? null) as any,
+        };
+    }
 
-        // создать новую PENDING
-        return prisma.friendRequest.create({
-            data: {
-                fromId: currentUserId,
-                toId: to.id,
-                status: $Enums.FriendRequestStatus.PENDING, // [CHANGED]
-            },
-            include: { from: true, to: true },
+    private async hydrateReq(r: any): Promise<FriendRequestDto> {
+        const [fromU, toU] = await Promise.all([
+            this.users.findById(r.fromUserId),
+            this.users.findById(r.toUserId),
+        ]);
+        return {
+            id: r.id,
+            from: fromU ? this.toUserDto(fromU) : null,
+            to: toU ? this.toUserDto(toU) : null,
+            status: r.status,
+            createdAt: (r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt)).toISOString(),
+            updatedAt: (r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt)).toISOString(),
+        };
+    }
+
+    private pairKey(a: string, b: string) {
+        const [x, y] = [String(a), String(b)].sort();
+        return `${x}|${y}`;
+    }
+
+    private async areFriends(a: string, b: string): Promise<boolean> {
+        const key = this.pairKey(a, b);
+        const found = await this.prisma.friendship.findUnique({ where: { pairKey: key } });
+        return Boolean(found);
+    }
+
+    private async addFriendship(a: string, b: string) {
+        const key = this.pairKey(a, b);
+        await this.prisma.friendship.upsert({
+            where: { pairKey: key },
+            update: {},
+            create: { pairKey: key, userIdA: a, userIdB: b },
         });
     }
 
-    /**
-     * Принять входящую заявку
-     */
-    async acceptRequest(currentUserId: string, requestId: string) {
-        const fr = await prisma.friendRequest.findUnique({ where: { id: requestId } });
-        if (!fr) throw new NotFoundException('Request not found');
-        if (fr.toId !== currentUserId) throw new ForbiddenException('Not your incoming request');
-        if (fr.status !== $Enums.FriendRequestStatus.PENDING) { // [CHANGED]
-            throw new BadRequestException('Request is not pending');
-        }
-
-        return prisma.friendRequest.update({
-            where: { id: requestId },
-            data: { status: $Enums.FriendRequestStatus.ACCEPTED }, // [CHANGED]
-            include: { from: true, to: true },
-        });
+    private async removeFriendship(a: string, b: string) {
+        const key = this.pairKey(a, b);
+        await this.prisma.friendship.deleteMany({ where: { pairKey: key } });
     }
 
-    /**
-     * Отклонить входящую заявку
-     */
-    async declineRequest(currentUserId: string, requestId: string) {
-        const fr = await prisma.friendRequest.findUnique({ where: { id: requestId } });
-        if (!fr) throw new NotFoundException('Request not found');
-        if (fr.toId !== currentUserId) throw new ForbiddenException('Not your incoming request');
-        if (fr.status !== $Enums.FriendRequestStatus.PENDING) { // [ADDED]
-            throw new BadRequestException('Request is not pending');
-        }
+    // ----- public API -----
 
-        return prisma.friendRequest.update({
-            where: { id: requestId },
-            data: { status: $Enums.FriendRequestStatus.DECLINED }, // [CHANGED] было 'DECLINED' строкой; теперь enum
-            include: { from: true, to: true },
+    async listFriends(req: Request): Promise<PublicUserDto[]> {
+        const me = await this.requireCurrentUser(req);
+        const rows = await this.prisma.friendship.findMany({
+            where: { OR: [{ userIdA: me.id }, { userIdB: me.id }] },
         });
+        const ids = rows.map(r => (r.userIdA === me.id ? r.userIdB : r.userIdA));
+        const users = await this.prisma.user.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, email: true, name: true, role: true, handle: true },
+        });
+        return users.map(this.toUserDto);
     }
 
-    /**
-     * Отменить свою исходящую заявку (cancel)
-     * В твоей схеме нет статуса CANCELED, поэтому используем DECLINED.
-     */
-    async cancelRequest(currentUserId: string, requestId: string) {
-        const fr = await prisma.friendRequest.findUnique({ where: { id: requestId } });
-        if (!fr) throw new NotFoundException('Request not found');
-        if (fr.fromId !== currentUserId) throw new ForbiddenException('Not your outgoing request');
-        if (fr.status !== $Enums.FriendRequestStatus.PENDING) { // [ADDED]
-            throw new BadRequestException('Request is not pending');
-        }
+    async listRequests(req: Request, type?: 'incoming' | 'outgoing'): Promise<FriendRequestDto[]> {
+        const me = await this.requireCurrentUser(req);
+        const where: any = {};
+        if (type === 'incoming') where.toUserId = me.id;
+        if (type === 'outgoing') where.fromUserId = me.id;
 
-        return prisma.friendRequest.update({
-            where: { id: requestId },
-            data: { status: $Enums.FriendRequestStatus.DECLINED }, // [FIX] было 'CANCELED' → enum DECLINED
-            include: { from: true, to: true },
-        });
-    }
-
-    /**
-     * Удалить друга.
-     * Так как FRIENDSHIP отдельной таблицы нет, дружба = запись со статусом ACCEPTED.
-     * Для "удаления" друга переводим её в DECLINED (или можно удалить запись — выбрал DECLINED для истории).
-     */
-    async removeFriend(currentUserId: string, friendUserId: string) {
-        const accepted = await prisma.friendRequest.findFirst({
-            where: {
-                status: $Enums.FriendRequestStatus.ACCEPTED, // [CHANGED]
-                OR: [
-                    { fromId: currentUserId, toId: friendUserId },
-                    { fromId: friendUserId, toId: currentUserId },
-                ],
-            },
-        });
-        if (!accepted) throw new NotFoundException('Not friends');
-
-        return prisma.friendRequest.update({
-            where: { id: accepted.id },
-            data: { status: $Enums.FriendRequestStatus.DECLINED }, // [CHANGED] снимаем дружбу
-        });
-    }
-
-    /**
-     * Список моих друзей (возвращаем пользователей, а не заявки)
-     */
-    async listFriends(currentUserId: string) {
-        const rows = await prisma.friendRequest.findMany({
-            where: {
-                status: $Enums.FriendRequestStatus.ACCEPTED, // [CHANGED]
-                OR: [{ fromId: currentUserId }, { toId: currentUserId }],
-            },
-            include: { from: true, to: true },
-            orderBy: { updatedAt: 'desc' },
-        });
-
-        return rows.map((fr) => {
-            const other = fr.fromId === currentUserId ? fr.to : fr.from;
-            return { id: other.id, email: other.email, name: other.name, handle: other.handle };
-        });
-    }
-
-    /**
-     * Список заявок
-     */
-    async listRequests(currentUserId: string, type?: 'incoming' | 'outgoing') {
-        const where =
-            type === 'incoming'
-                ? { toId: currentUserId }
-                : type === 'outgoing'
-                    ? { fromId: currentUserId }
-                    : { OR: [{ toId: currentUserId }, { fromId: currentUserId }] };
-
-        return prisma.friendRequest.findMany({
+        const rows = await this.prisma.friendRequest.findMany({
             where,
-            orderBy: { createdAt: 'desc' },
-            include: { from: true, to: true },
+            orderBy: { createdAt: 'asc' },
         });
+        return Promise.all(rows.map(r => this.hydrateReq(r)));
     }
 
-    /**
-     * Поиск пользователей по handle (SQLite: без mode:'insensitive')
-     * Сохраняем lowercased handle в базе → ищем тоже по lowercased
-     */
-    async searchUsersByHandle(q: string) {
-        if (!q || q.trim().length < 2) return [];
-        const qq = q.trim().toLowerCase(); // [ADDED]
-        return prisma.user.findMany({
-            where: { handle: { contains: qq } }, // [FIX] убран mode: 'insensitive'
-            take: 20,
-            orderBy: { handle: 'asc' },
-            select: { id: true, email: true, name: true, handle: true },
+    async createRequest(req: Request, body: CreateFriendRequestDto): Promise<FriendRequestDto> {
+        const me = await this.requireCurrentUser(req);
+        const toHandle = (body?.toHandle ?? '').trim();
+        if (!toHandle) throw new BadRequestException('toHandle is required');
+        if (toHandle.length < 3) throw new BadRequestException('toHandle must be longer than or equal to 3 characters');
+
+        const target = await this.prisma.user.findUnique({ where: { handle: toHandle } });
+        if (!target) throw new NotFoundException('User with such handle not found');
+
+        if (String(target.id) === String(me.id)) {
+            throw new BadRequestException('Cannot send a friend request to yourself');
+        }
+
+        if (await this.areFriends(me.id, target.id)) {
+            throw new BadRequestException('Already friends');
+        }
+
+        const existingOutgoing = await this.prisma.friendRequest.findFirst({
+            where: { fromUserId: me.id, toUserId: target.id, status: 'PENDING' },
         });
+        if (existingOutgoing) throw new BadRequestException('Request already exists');
+
+        // зеркальная входящая → auto-accept
+        const mirrored = await this.prisma.friendRequest.findFirst({
+            where: { fromUserId: target.id, toUserId: me.id, status: 'PENDING' },
+        });
+        if (mirrored) {
+            const updated = await this.prisma.$transaction(async (tx) => {
+                const fr = await tx.friendRequest.update({
+                    where: { id: mirrored.id },
+                    data: { status: 'ACCEPTED' },
+                });
+                await this.addFriendship(me.id, target.id);
+                return fr;
+            });
+            return this.hydrateReq(updated);
+        }
+
+        const created = await this.prisma.friendRequest.create({
+            data: {
+                fromUserId: me.id,
+                toUserId: target.id,
+                status: 'PENDING',
+            },
+        });
+        return this.hydrateReq(created);
+    }
+
+    async accept(req: Request, id: string): Promise<FriendRequestDto> {
+        const me = await this.requireCurrentUser(req);
+        const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
+        if (!fr) throw new NotFoundException('Request not found');
+        if (String(fr.toUserId) !== String(me.id)) throw new ForbiddenException('Only recipient can accept');
+        if (fr.status !== 'PENDING') throw new BadRequestException('Request is not pending');
+
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const u = await tx.friendRequest.update({
+                where: { id },
+                data: { status: 'ACCEPTED' },
+            });
+            await this.addFriendship(fr.fromUserId, fr.toUserId);
+            return u;
+        });
+        return this.hydrateReq(updated);
+    }
+
+    async decline(req: Request, id: string): Promise<FriendRequestDto> {
+        const me = await this.requireCurrentUser(req);
+        const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
+        if (!fr) throw new NotFoundException('Request not found');
+        if (String(fr.toUserId) !== String(me.id)) throw new ForbiddenException('Only recipient can decline');
+        if (fr.status !== 'PENDING') throw new BadRequestException('Request is not pending');
+
+        const updated = await this.prisma.friendRequest.update({
+            where: { id },
+            data: { status: 'DECLINED' },
+        });
+        return this.hydrateReq(updated);
+    }
+
+    async cancel(req: Request, id: string): Promise<FriendRequestDto> {
+        const me = await this.requireCurrentUser(req);
+        const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
+        if (!fr) throw new NotFoundException('Request not found');
+        if (String(fr.fromUserId) !== String(me.id)) throw new ForbiddenException('Only author can cancel');
+        if (fr.status !== 'PENDING') throw new BadRequestException('Request is not pending');
+
+        const updated = await this.prisma.friendRequest.update({
+            where: { id },
+            data: { status: 'CANCELED' },
+        });
+        return this.hydrateReq(updated);
+    }
+
+    async removeFriend(req: Request, userId: string): Promise<{ data: boolean }> {
+        const me = await this.requireCurrentUser(req);
+        await this.removeFriendship(me.id, String(userId));
+        return { data: true };
+    }
+
+    async searchUsers(q: string): Promise<PublicUserDto[]> {
+        const query = (q ?? '').trim();
+        if (!query) return [];
+        const users = await this.prisma.user.findMany({
+            where: {
+                OR: [
+                    { handle: { contains: query, mode: 'insensitive' } },
+                    { email:  { contains: query, mode: 'insensitive' } },
+                    { id:     { contains: query } },
+                ],
+            },
+            take: 20,
+            select: { id: true, email: true, name: true, role: true, handle: true },
+        });
+        return users.map(this.toUserDto);
     }
 }

@@ -1,7 +1,7 @@
-// [ADDED FILE] друзья через сервис
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+// [CHANGED] добавил sendFriendRequest(input) и прокинул @Context
+import { Resolver, Query, Mutation, Args, Context } from '@nestjs/graphql';
 import { FriendsService } from './friends.service';
-import { FriendRequestGql, FriendRequestStatusGql, UserGql } from './graphql.models';
+import { FriendRequestGql, FriendRequestStatusGql, UserGql, SendFriendRequestInput } from './graphql.models';
 
 function toUserGql(u: any | undefined | null): UserGql | null {
     if (!u) return null;
@@ -39,60 +39,66 @@ function toFriendReqGql(r: any): FriendRequestGql {
 export class FriendsResolver {
     constructor(private readonly friends: FriendsService) {}
 
-    // [ADDED] список друзей
     @Query(() => [UserGql])
-    async friendsSvc(): Promise<UserGql[]> {
-        const list = await this.friends.listFriends();
+    async friendsSvc(@Context() ctx: any): Promise<UserGql[]> {
+        const list = await this.friends.listFriends(ctx);
         return list.map((u: any) => toUserGql(u)!).filter(Boolean) as UserGql[];
     }
 
-    // [ADDED] заявки (incoming|outgoing)
     @Query(() => [FriendRequestGql])
     async friendRequests(
-        @Args('direction', { type: () => String, nullable: true }) direction?: 'incoming' | 'outgoing'
+        @Args('direction', { type: () => String, nullable: true }) direction?: 'incoming' | 'outgoing',
+        @Context() ctx?: any,
     ): Promise<FriendRequestGql[]> {
-        const list = await this.friends.listRequests(direction);
+        const list = await this.friends.listRequests(direction, ctx);
         return list.map(toFriendReqGql);
     }
 
-    // [ADDED] отправить заявку
     @Mutation(() => FriendRequestGql)
-    async requestFriend(@Args('userId') userId: string): Promise<FriendRequestGql> {
-        const r = await this.friends.requestFriend(userId);
+    async requestFriend(@Args('userId') userId: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+        const r = await this.friends.requestFriend(userId, ctx);
         return toFriendReqGql(r);
     }
 
-    // [ADDED] принять заявку
+    // [ADDED] универсальная мутация: либо userId, либо toHandle
     @Mutation(() => FriendRequestGql)
-    async acceptFriendRequest(@Args('id') id: string): Promise<FriendRequestGql> {
-        const r = await this.friends.acceptRequest(id);
+    async sendFriendRequest(
+        @Args('input') input: SendFriendRequestInput,
+        @Context() ctx?: any,
+    ): Promise<FriendRequestGql> {
+        const r = await this.friends.sendRequest(
+            { userId: input.userId ?? undefined, toHandle: input.toHandle ?? undefined },
+            ctx,
+        );
         return toFriendReqGql(r);
     }
 
-    // [ADDED] отклонить заявку
     @Mutation(() => FriendRequestGql)
-    async declineFriendRequest(@Args('id') id: string): Promise<FriendRequestGql> {
-        const r = await this.friends.declineRequest(id);
+    async acceptFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+        const r = await this.friends.acceptRequest(id, ctx);
         return toFriendReqGql(r);
     }
 
-    // [ADDED] отменить свою заявку
     @Mutation(() => FriendRequestGql)
-    async cancelFriendRequest(@Args('id') id: string): Promise<FriendRequestGql> {
-        const r = await this.friends.cancelRequest(id);
+    async declineFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+        const r = await this.friends.declineRequest(id, ctx);
         return toFriendReqGql(r);
     }
 
-    // [ADDED] удалить друга
+    @Mutation(() => FriendRequestGql)
+    async cancelFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+        const r = await this.friends.cancelRequest(id, ctx);
+        return toFriendReqGql(r);
+    }
+
     @Mutation(() => Boolean)
-    async removeFriend(@Args('userId') userId: string): Promise<boolean> {
-        return this.friends.removeFriend(userId);
+    async removeFriend(@Args('userId') userId: string, @Context() ctx?: any): Promise<boolean> {
+        return this.friends.removeFriend(userId, ctx);
     }
 
-    // [ADDED] поиск юзеров
     @Query(() => [UserGql])
-    async searchUsers(@Args('q') q: string): Promise<UserGql[]> {
-        const list = await this.friends.searchUsers(q);
+    async searchUsers(@Args('q') q: string, @Context() ctx?: any): Promise<UserGql[]> {
+        const list = await this.friends.searchUsers(q, ctx);
         return list.map((u: any) => toUserGql(u)!).filter(Boolean) as UserGql[];
     }
 }

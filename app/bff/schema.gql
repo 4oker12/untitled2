@@ -52,6 +52,7 @@ type Mutation {
   register(input: RegisterInput!): User!
   login(input: LoginInput!): AuthPayload!
   requestFriend(userId: String!): FriendRequest!
+  sendFriendRequest(input: SendFriendRequestInput!): FriendRequest!
   acceptFriendRequest(id: String!): FriendRequest!
   declineFriendRequest(id: String!): FriendRequest!
   cancelFriendRequest(id: String!): FriendRequest!
@@ -68,4 +69,9 @@ input RegisterInput {
 input LoginInput {
   email: String!
   password: String!
+}
+
+input SendFriendRequestInput {
+  userId: String
+  toHandle: String
 }
