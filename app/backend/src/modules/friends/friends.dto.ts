@@ -1,4 +1,4 @@
-// [NEW] app/backend/src/modules/friends/friends.dto.ts
+// [NEW] app/backend/src/modules/friends/friends.friends.users.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
 

@@ -2,36 +2,41 @@
 // Service = бизнес-логика + доступ к данным. Здесь мы используем PrismaClient и возвращаем сущности БД.
 
 import { Injectable, ConflictException } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+import { PrismaService } from '../../prisma/prisma.service.js'; // путь под файл
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 type Role = 'ADMIN' | 'USER';
 
+
+
 @Injectable()
 export class UsersService {
+  constructor(private readonly prisma: PrismaService) {}
+
   async findByEmail(email: string) {
-    return prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
   async findByHandle(handle: string) {
     const norm = handle.trim().toLowerCase(); // [ADDED] нормализация
-    return prisma.user.findUnique({ where: { handle: norm } });
+    return this.prisma.user.findUnique({ where: { handle: norm } });
   }
 
   async findById(id: string) {
-    return prisma.user.findUnique({ where: { id } });
+    return this.prisma.user.findUnique({ where: { id } });
   }
 
   async list() {
-    return prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
   async searchByHandle(q: string) {
     const qq = q.trim().toLowerCase();
     if (!qq || qq.length < 2) return [];
-    return prisma.user.findMany({
+    return this.prisma.user.findMany({
       where: { handle: { contains: qq } },
       take: 20,
       orderBy: { handle: 'asc' },
@@ -49,7 +54,7 @@ export class UsersService {
     const normHandle = data.handle ? data.handle.trim().toLowerCase() : null;
 
     try {
-      return await prisma.user.create({
+      return await this.prisma.user.create({
         data: {
           email: data.email,
           passwordHash,
@@ -74,7 +79,7 @@ export class UsersService {
   async update(id: string, data: { name?: string | null; role?: Role; handle?: string | null }) {
     const normHandle = data.handle ? data.handle.trim().toLowerCase() : undefined;
     try {
-      return await prisma.user.update({
+      return await this.prisma.user.update({
         where: { id },
         data: {
           name: data.name ?? undefined,

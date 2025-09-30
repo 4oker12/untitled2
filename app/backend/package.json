@@ -12,10 +12,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "start": "node dist/main.js",
-    "prisma": "prisma",
-    "seed": "node prisma/seed.mjs",
-    "db:seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "prisma": "src/prisma",
+    "seed": "node src/prisma/seed.mjs",
+    "db:seed": "src/prisma db seed",
+    "postinstall": "src/prisma generate"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

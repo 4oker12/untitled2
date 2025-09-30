@@ -1,4 +1,4 @@
-// app/bff/src/modules/friends.dto.ts
+// app/bff/src/modules/friends.friends.users.dto.ts
 // [ADDED] Минимальные интерфейсы для ответов бэкенда по друзьям/поиску
 
 export interface PublicUserDto {

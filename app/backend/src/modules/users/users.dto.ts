@@ -1,4 +1,4 @@
-// src/modules/users/dto.ts
+// src/modules/users/friends.users.dto.ts
 // DTO описывают форму данных на вход/выход API и проверяются ValidationPipe'ом
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';

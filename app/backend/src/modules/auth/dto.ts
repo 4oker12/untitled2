@@ -1,4 +1,4 @@
-// app/backend/src/modules/auth/dto.ts
+// app/backend/src/modules/auth/friends.users.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
