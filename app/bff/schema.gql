@@ -51,7 +51,6 @@ type Mutation {
   debugEcho(payload: String!): String!
   register(input: RegisterInput!): User!
   login(input: LoginInput!): AuthPayload!
-  requestFriend(userId: String!): FriendRequest!
   sendFriendRequest(input: SendFriendRequestInput!): FriendRequest!
   acceptFriendRequest(id: String!): FriendRequest!
   declineFriendRequest(id: String!): FriendRequest!

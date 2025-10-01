@@ -1,100 +1,90 @@
-// src/modules/users/users.service.ts
-// Service = бизнес-логика + доступ к данным. Здесь мы используем PrismaClient и возвращаем сущности БД.
-
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-
-import { PrismaService } from '../../prisma/prisma.service.js'; // путь под файл
+import { PrismaService } from '../../prisma/prisma.service.js';
 import bcrypt from 'bcrypt';
-
+import { CreateUserDto, UpdateUserDto } from './users.dto.js';
 
 type Role = 'ADMIN' | 'USER';
-
-
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
-
-  async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
-  }
-
-  async findByHandle(handle: string) {
-    const norm = handle.trim().toLowerCase(); // [ADDED] нормализация
-    return this.prisma.user.findUnique({ where: { handle: norm } });
-  }
-
-  async findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
 
   async list() {
     return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
   async searchByHandle(q: string) {
-    const qq = q.trim().toLowerCase();
-    if (!qq || qq.length < 2) return [];
+    const query = q.trim().toLowerCase();
+    if (!query) return [];
+    // CHANGED: без mode, ищем по нормализованному handle
     return this.prisma.user.findMany({
-      where: { handle: { contains: qq } },
-      take: 20,
+      where: { handle: { contains: query } }, // CHANGED
       orderBy: { handle: 'asc' },
     });
   }
 
-  async create(data: {
-    email: string;
-    password: string;            // сырой пароль — хешируем здесь
-    name?: string | null;
-    role?: Role;
-    handle?: string | null;
-  }) {
-    const passwordHash = await bcrypt.hash(data.password, 12);
-    const normHandle = data.handle ? data.handle.trim().toLowerCase() : null;
+  async findById(id: string) {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
 
+  async findByEmail(email: string) {
+    // CHANGED: нормализуем email, чтобы уникальность работала независимо от регистра
+    return this.prisma.user.findUnique({ where: { email: email.toLowerCase() } }); // CHANGED
+  }
+
+  async findByHandle(handle: string) {
+    return this.prisma.user.findUnique({ where: { handle: handle.toLowerCase() } }); // CHANGED
+  }
+
+  async create(data: CreateUserDto) {
+    const normHandle = data.handle?.toLowerCase() ?? null; // CHANGED
+    const normEmail  = data.email.toLowerCase();           // CHANGED
+
+    if (normHandle) {
+      const existingHandle = await this.findByHandle(normHandle);
+      if (existingHandle) throw new ConflictException('HANDLE_TAKEN');
+    }
+    const existingEmail = await this.findByEmail(normEmail);
+    if (existingEmail) throw new ConflictException('EMAIL_TAKEN');
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
     try {
       return await this.prisma.user.create({
         data: {
-          email: data.email,
+          email: normEmail,                              // CHANGED
           passwordHash,
           name: data.name ?? null,
           role: (data.role ?? 'USER') as Role,
-          handle: normHandle,
-          // id/createdAt/updatedAt генерятся автоматически по schema.prisma
+          handle: normHandle,                            // CHANGED
         },
       });
     } catch (e: any) {
-      // [ADDED] аккуратная обработка уникальных ограничений (email/handle)
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const target = Array.isArray((e as any).meta?.target) ? (e as any).meta.target : [];
-        if (target.includes('email')) throw new ConflictException('EMAIL_TAKEN');
-        if (target.includes('handle')) throw new ConflictException('HANDLE_TAKEN');
         throw new ConflictException('UNIQUE_CONSTRAINT_VIOLATION');
       }
       throw e;
     }
   }
 
-  async update(id: string, data: { name?: string | null; role?: Role; handle?: string | null }) {
-    const normHandle = data.handle ? data.handle.trim().toLowerCase() : undefined;
+  async update(id: string, data: UpdateUserDto) {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+
+    const patch: any = {};
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.role !== undefined) patch.role = data.role;
+    if (data.handle !== undefined) {
+      patch.handle = data.handle ? data.handle.toLowerCase() : null; // CHANGED
+    }
+
     try {
-      return await this.prisma.user.update({
-        where: { id },
-        data: {
-          name: data.name ?? undefined,
-          role: (data.role as Role) ?? undefined,
-          handle: normHandle,
-        },
-      });
+      return await this.prisma.user.update({ where: { id }, data: patch });
     } catch (e: any) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const target = Array.isArray((e as any).meta?.target) ? (e as any).meta.target : [];
-        if (target.includes('handle')) throw new ConflictException('HANDLE_TAKEN');
         throw new ConflictException('UNIQUE_CONSTRAINT_VIOLATION');
       }
       throw e;
     }
   }
 }
-

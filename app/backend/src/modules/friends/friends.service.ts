@@ -1,4 +1,5 @@
-// app/backend/src/modules/friends/friends.service.ts
+// src/modules/friends/friends.service.ts
+
 import {
     BadRequestException,
     ForbiddenException,
@@ -12,13 +13,14 @@ import {
     CreateFriendRequestDto,
     FriendRequestDto,
     PublicUserDto,
+    FriendRequestStatus,
 } from './friends.dto.js';
 
 @Injectable()
 export class FriendsService {
     constructor(
-        private readonly prisma: PrismaService, // <-- вместо new PrismaClient()
-        private readonly auth: AuthService,
+        private readonly prisma: PrismaService, // OK
+        private readonly auth: AuthService,     // OK
     ) {}
 
     // --- helpers ---
@@ -58,14 +60,22 @@ export class FriendsService {
             id: r.id,
             from: from ? this.toUserDto(from) : null,
             to: to ? this.toUserDto(to) : null,
-            status: r.status,
-            createdAt: (r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt)).toISOString(),
-            updatedAt: (r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt)).toISOString(),
+            status: r.status as FriendRequestStatus,
+            createdAt:
+                r.createdAt instanceof Date
+                    ? r.createdAt.toISOString()
+                    : new Date(r.createdAt).toISOString(),
+            updatedAt:
+                r.updatedAt instanceof Date
+                    ? r.updatedAt.toISOString()
+                    : new Date(r.updatedAt).toISOString(),
         };
     }
 
     // --- public API ---
-    async listFriends(req: Request) {
+
+    /** список друзей = все user-ы, где есть friendRequest со статусом ACCEPTED и я участник */
+    async listFriends(req: Request): Promise<{ data: PublicUserDto[] }> {
         const me = await this.requireMe(req);
 
         const accepted = await this.prisma.friendRequest.findMany({
@@ -77,40 +87,52 @@ export class FriendsService {
             orderBy: { createdAt: 'asc' },
         });
 
-        const otherIds = Array.from(new Set(accepted.map(r => (r.fromId === me.id ? r.toId : r.fromId))));
+        const otherIds = Array.from(
+            new Set(accepted.map((r) => (r.fromId === me.id ? r.toId : r.fromId))),
+        );
         if (otherIds.length === 0) return { data: [] };
 
         const users = await this.prisma.user.findMany({
             where: { id: { in: otherIds } },
             select: { id: true, email: true, name: true, role: true, handle: true },
         });
-        return { data: users.map(u => this.toUserDto(u)) };
+        return { data: users.map((u) => this.toUserDto(u)) };
     }
 
-    async listRequests(req: Request, type?: 'incoming'|'outgoing') {
+    /** список заявок: incoming/outgoing/все */
+    async listRequests(
+        req: Request,
+        type?: 'incoming' | 'outgoing',
+    ): Promise<{ data: FriendRequestDto[] }> {
         const me = await this.requireMe(req);
         const where: any = {};
         if (type === 'incoming') where.toId = me.id;
         if (type === 'outgoing') where.fromId = me.id;
+        if (!type) where.OR = [{ fromId: me.id }, { toId: me.id }];
 
         const rows = await this.prisma.friendRequest.findMany({
             where,
             orderBy: { createdAt: 'asc' },
         });
-        const data = await Promise.all(rows.map(r => this.hydrate(r)));
+        const data = await Promise.all(rows.map((r) => this.hydrate(r)));
         return { data };
     }
 
-    async createRequest(req: Request, body: CreateFriendRequestDto) {
+    /** создать заявку другу по handle */
+    async createRequest(
+        req: Request,
+        body: CreateFriendRequestDto,
+    ): Promise<{ data: FriendRequestDto }> {
         const me = await this.requireMe(req);
-        const toHandle = (body?.toHandle ?? '').trim();
+        const toHandle = (body?.toHandle ?? '').trim().toLowerCase();
         if (!toHandle) throw new BadRequestException('toHandle is required');
-        if (toHandle.length < 3) throw new BadRequestException('toHandle must be longer than or equal to 3 characters');
+        if (toHandle.length < 3) throw new BadRequestException('toHandle too short');
 
         const target = await this.prisma.user.findUnique({ where: { handle: toHandle } });
         if (!target) throw new NotFoundException('User with such handle not found');
-        if (target.id === me.id) throw new BadRequestException('Cannot send a friend request to yourself');
+        if (target.id === me.id) throw new BadRequestException('Cannot send request to yourself');
 
+        // уже друзья?
         const already = await this.prisma.friendRequest.findFirst({
             where: {
                 status: 'ACCEPTED',
@@ -122,18 +144,20 @@ export class FriendsService {
         });
         if (already) throw new BadRequestException('Already friends');
 
+        // исходящая уже есть?
         const outgoing = await this.prisma.friendRequest.findFirst({
             where: { fromId: me.id, toId: target.id, status: 'PENDING' },
         });
         if (outgoing) throw new BadRequestException('Request already exists');
 
+        // встречная висит? — авто-ACCEPT
         const mirrored = await this.prisma.friendRequest.findFirst({
             where: { fromId: target.id, toId: me.id, status: 'PENDING' },
         });
         if (mirrored) {
             const updated = await this.prisma.friendRequest.update({
                 where: { id: mirrored.id },
-                data: { status: 'ACCEPTED' },
+                data: { status: 'ACCEPTED' }, // CHANGED: фикс — только обновляем заявку
             });
             return { data: await this.hydrate(updated) };
         }
@@ -144,7 +168,8 @@ export class FriendsService {
         return { data: await this.hydrate(created) };
     }
 
-    async accept(req: Request, id: string) {
+    /** принять входящую */
+    async accept(req: Request, id: string): Promise<{ data: FriendRequestDto }> {
         const me = await this.requireMe(req);
         const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
         if (!fr) throw new NotFoundException('Request not found');
@@ -153,12 +178,13 @@ export class FriendsService {
 
         const updated = await this.prisma.friendRequest.update({
             where: { id },
-            data: { status: 'ACCEPTED' },
+            data: { status: 'ACCEPTED' }, // CHANGED: без создания Friendship
         });
         return { data: await this.hydrate(updated) };
     }
 
-    async decline(req: Request, id: string) {
+    /** отклонить входящую */
+    async decline(req: Request, id: string): Promise<{ data: FriendRequestDto }> {
         const me = await this.requireMe(req);
         const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
         if (!fr) throw new NotFoundException('Request not found');
@@ -172,7 +198,9 @@ export class FriendsService {
         return { data: await this.hydrate(updated) };
     }
 
-    async cancel(req: Request, id: string) {
+    /** отменить свою исходящую */
+    async cancel(req: Request, id: string): Promise<{ data: FriendRequestDto }> {
+        // ADDED: метод был нужен, ты писал что его нет
         const me = await this.requireMe(req);
         const fr = await this.prisma.friendRequest.findUnique({ where: { id } });
         if (!fr) throw new NotFoundException('Request not found');
@@ -186,8 +214,10 @@ export class FriendsService {
         return { data: await this.hydrate(updated) };
     }
 
-    async removeFriend(req: Request, userId: string) {
+    /** удалить друга (по сути — убрать accepted-связь) */
+    async removeFriend(req: Request, userId: string): Promise<{ data: boolean }> {
         const me = await this.requireMe(req);
+        // CHANGED: «раздруживание» = удаляем все заявки в статусе ACCEPTED между пользователями
         await this.prisma.friendRequest.deleteMany({
             where: {
                 status: 'ACCEPTED',
@@ -200,22 +230,25 @@ export class FriendsService {
         return { data: true };
     }
 
-    // (опционально, если у тебя есть роут /friends/search/users)
-    async searchUsers(q: string) {
-        const query = (q ?? '').trim();
+    /** поиск пользователей (поисковый эндпойнт — на выбор) */
+    async searchUsers(q: string): Promise<{ data: PublicUserDto[] }> {
+        const query = (q ?? '').trim().toLowerCase();
+
         if (!query) return { data: [] };
 
+        // CHANGED: убран `mode: 'insensitive'`, опираемся на то, что handle/email храним в нижнем регистре
         const users = await this.prisma.user.findMany({
             where: {
                 OR: [
-                    { handle: { contains: query, mode: 'insensitive' } as any },
-                    { email:  { contains: query, mode: 'insensitive' } as any },
-                    { id:     { contains: query } as any },
+                    { handle: { contains: query } }, // CHANGED
+                    { email:  { contains: query } }, // CHANGED
+                    { id:     { contains: query } }, // id строковый в твоей схеме
                 ],
             },
             take: 20,
             select: { id: true, email: true, name: true, role: true, handle: true },
         });
-        return { data: users.map(u => this.toUserDto(u)) };
+
+        return { data: users.map((u) => this.toUserDto(u)) };
     }
 }

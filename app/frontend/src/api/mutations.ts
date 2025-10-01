@@ -54,3 +54,32 @@ export const CREATE_USER = gql`
     createUser(input: $input) { id email name role }
   }
 `;
+
+export const SEND_FRIEND_REQUEST = gql`
+  mutation SendFriendRequest($input: SendFriendRequestInput!) {
+    sendFriendRequest(input: $input) {
+      id
+      status
+      from { handle }
+      to   { handle }
+    }
+  }
+`;
+
+export const ACCEPT_FRIEND_REQUEST = gql`
+  mutation AcceptFriendRequest($id: ID!) {
+    acceptFriendRequest(id: $id) { id status }
+  }
+`;
+
+export const DECLINE_FRIEND_REQUEST = gql`
+  mutation DeclineFriendRequest($id: ID!) {
+    declineFriendRequest(id: $id) { id status }
+  }
+`;
+
+export const CANCEL_FRIEND_REQUEST = gql`
+  mutation CancelFriendRequest($id: ID!) {
+    cancelFriendRequest(id: $id) { id status }
+  }
+`;

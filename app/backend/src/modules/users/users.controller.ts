@@ -5,7 +5,7 @@
 import { Body, Controller, Get, Param, Post, Patch, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service.js';
-import { CreateUserDto, UpdateUserDto, UserDto, Role } from './users.dto';
+import { CreateUserDto, UpdateUserDto, UserDto, Role } from './users.dto.js';
 
 // [ADDED] утилита маппинга из сущности БД в DTO ответа
 const toUserDto = (u: any): UserDto => ({

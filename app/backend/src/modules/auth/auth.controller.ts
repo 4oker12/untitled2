@@ -3,7 +3,7 @@ import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common'
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { UsersService } from '../users/users.service.js';
-import { UserDto } from '../users/users.dto';
+import { UserDto } from '../users/users.dto.js';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RegisterDto, LoginDto } from './dto.js';
 // [ADDED]
