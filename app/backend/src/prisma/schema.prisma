@@ -35,6 +35,9 @@ model User {
   sentRequests     FriendRequest[] @relation("fromUser")
   receivedRequests FriendRequest[] @relation("toUser")
 
+  messagesSent     Message[] @relation("MessageFrom")
+  messagesReceived Message[] @relation("MessageTo")
+
   refreshTokens RefreshToken[] // [ADDED] обратная сторона связи с RefreshToken
 }
 
@@ -65,3 +68,19 @@ model FriendRequest {
   @@index([toId])
   @@index([fromId])
 }
+
+model Message {
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  body       String            // ← убрали @db.Text
+  createdAt  DateTime @default(now())
+  readAt     DateTime?
+
+  // двусторонние связи к User с разными именами
+  from User @relation("MessageFrom", fields: [fromUserId], references: [id])
+  to   User @relation("MessageTo",   fields: [toUserId],   references: [id])
+
+  @@index([fromUserId, toUserId, createdAt])
+}
+
