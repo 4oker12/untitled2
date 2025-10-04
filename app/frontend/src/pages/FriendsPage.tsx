@@ -1,12 +1,15 @@
 import React from 'react';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client';
-import { FRIENDS, FRIEND_REQUESTS, SEARCH_USERS } from '../api/queries';
+import { FRIENDS, FRIEND_REQUESTS, SEARCH_USERS, UNREAD_SUMMARY  } from '../api/queries';
 import {
   ACCEPT_FRIEND_REQUEST,
   CANCEL_FRIEND_REQUEST,
   DECLINE_FRIEND_REQUEST,
   SEND_FRIEND_REQUEST,
+  REMOVE_FRIEND,
 } from '../api/mutations';
+import { MessageModal } from '../components/MessageModal'; // [ADDED]
+
 
 type Dir = 'incoming' | 'outgoing';
 
@@ -23,6 +26,8 @@ export const FriendsPage: React.FC = () => {
   const [rqTab, setRqTab] = React.useState<Dir>('incoming');
   const [q, setQ] = React.useState('');
   const [busyKey, setBusyKey] = React.useState<string | null>(null);
+  const [messageTo, setMessageTo] = React.useState<{ id: string; handle?: string | null; email?: string | null } | null>(null); // [ADDED]
+
 
   // Список друзей
   const friendsQ = useQuery(FRIENDS, { fetchPolicy: 'cache-and-network' });
@@ -32,6 +37,14 @@ export const FriendsPage: React.FC = () => {
     variables: { direction: rqTab },
     fetchPolicy: 'cache-and-network',
   });
+
+  const { data: unreadData } = useQuery(UNREAD_SUMMARY, { pollInterval: 15000 });
+  const byUserArr = unreadData?.unreadSummary?.byUser ?? [];
+  const unreadMap = React.useMemo(() => {
+    const m = new Map<string, number>();
+    for (const x of byUserArr) m.set(x.userId, x.count);
+    return m;
+  }, [byUserArr]);
 
   // Поиск
   const [runSearch, searchQ] = useLazyQuery(SEARCH_USERS, { fetchPolicy: 'network-only' });
@@ -50,6 +63,8 @@ export const FriendsPage: React.FC = () => {
   const [acceptReq]  = useMutation(ACCEPT_FRIEND_REQUEST);
   const [declineReq] = useMutation(DECLINE_FRIEND_REQUEST);
   const [cancelReq]  = useMutation(CANCEL_FRIEND_REQUEST);
+  const [removeFriend] = useMutation(REMOVE_FRIEND);
+
 
   const refetchAll = async () => {
     await Promise.allSettled([
@@ -130,7 +145,15 @@ export const FriendsPage: React.FC = () => {
   };
 
   const onRemove = async (userId: string) => {
-    alert('Удаление друга добавим отдельной мутацией (removeFriend) при необходимости.');
+    try {
+      if (!confirm('Удалить этого друга?')) return;
+      await removeFriend({
+        variables: { userId },
+        refetchQueries: [{ query: FRIENDS }], // обновим список после удаления
+      });
+    } catch (e: any) {
+      alert(e?.message || 'Ошибка удаления');
+    }
   };
 
   const TabBtn: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
@@ -258,12 +281,23 @@ export const FriendsPage: React.FC = () => {
                         <div className="font-medium">{f.handle || f.email}</div>
                         <div className="text-sm text-gray-500">{f.email}</div>
                       </div>
-                      <button className="text-red-600" onClick={() => onRemove(f.id)}>Remove</button>
+                      <div className="flex gap-3">
+                        <button
+                            className="text-blue-600"
+                            onClick={() => setMessageTo({ id: f.id, handle: f.handle, email: f.email })} // [ADDED]
+                        >
+                          Message
+                        </button>
+                        <button className="text-red-600" onClick={() => onRemove(f.id)}>Remove</button>
+                      </div>
                     </li>
                 ))}
               </ul>
             </section>
         )}
+
+        {/* [ADDED] модалка */}
+        <MessageModal open={!!messageTo} to={messageTo} onClose={() => setMessageTo(null)} />
       </div>
   );
 };

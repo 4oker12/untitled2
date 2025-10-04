@@ -11,6 +11,8 @@ import { DebugResolver } from './debug.resolver';
 import { BackendModule } from './modules/backend.module';
 import { AuthResolver } from './modules/auth.resolver';
 import { FriendsModule } from './modules/friends/friends.module'; // [ADDED]
+import { MessagesModule } from './modules/messages/messages.module.js'; // [ADDED]
+
 
 @Module({
   imports: [
@@ -22,7 +24,8 @@ import { FriendsModule } from './modules/friends/friends.module'; // [ADDED]
       // [ADDED] даём резолверам доступ к res (для Set-Cookie)
       context: ({ req, res }: { req: Request; res: Response }) => ({ req, res }),    }),
     BackendModule,
-    FriendsModule, // [ADDED]
+    FriendsModule,
+    MessagesModule// [ADDED]
   ],
   providers: [AppResolver, DebugResolver, AuthResolver],
 })

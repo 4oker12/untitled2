@@ -1,6 +1,8 @@
+// app/backend/src/modules/auth/auth.service.ts
 import { Injectable } from '@nestjs/common';
-import type { SignOptions } from 'jsonwebtoken'
+import type { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+
 import { ConfigService } from '../config/config.service.js';
 import { signJwt, verifyJwt, type JwtPayload } from '../../common/jwt.js';
 
@@ -8,6 +10,7 @@ import { signJwt, verifyJwt, type JwtPayload } from '../../common/jwt.js';
 export class AuthService {
   constructor(private readonly config: ConfigService) {}
 
+  // --- password helpers ---
   async hashPassword(password: string) {
     return bcrypt.hash(password, 12);
   }
@@ -16,14 +19,23 @@ export class AuthService {
     return bcrypt.compare(password, hash);
   }
 
+  // --- token helpers (RS256) ---
   issueAccessToken(sub: string, role: 'ADMIN' | 'USER') {
     const payload: JwtPayload = { sub, role, type: 'access' };
-    return signJwt(payload, this.config.accessPrivateKey, this.config.accessTtl as SignOptions['expiresIn']);
+    return signJwt(
+        payload,
+        this.config.accessPrivateKey,
+        this.config.accessTtl as SignOptions['expiresIn'],
+    );
   }
 
   issueRefreshToken(sub: string, role: 'ADMIN' | 'USER') {
     const payload: JwtPayload = { sub, role, type: 'refresh' };
-    return signJwt(payload, this.config.refreshPrivateKey,  this.config.refreshTtl as SignOptions['expiresIn']);
+    return signJwt(
+        payload,
+        this.config.refreshPrivateKey,
+        this.config.refreshTtl as SignOptions['expiresIn'],
+    );
   }
 
   verifyAccessToken(token: string) {

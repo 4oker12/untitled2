@@ -1,4 +1,4 @@
-import { Field, ID, InputType, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { Field, ID, Int, InputType, ObjectType, registerEnumType } from '@nestjs/graphql';
 
 export enum RoleGql {
   ADMIN = 'ADMIN',
@@ -65,4 +65,39 @@ export class FriendRequestGql {
 export class SendFriendRequestInput {
   @Field(() => String, { nullable: true }) userId?: string;
   @Field(() => String, { nullable: true }) toHandle?: string;
+}
+
+@ObjectType('Message')
+export class MessageGql {
+  @Field(() => ID) id!: string;
+  @Field(() => ID) fromUserId!: string;
+  @Field(() => ID) toUserId!: string;
+  @Field(() => String) body!: string;
+  @Field(() => String) createdAt!: string;
+  @Field(() => String, { nullable: true }) readAt?: string | null;
+}
+
+@InputType('SendMessageInput')
+export class SendMessageInput {
+  @Field(() => ID) toUserId!: string;
+  @Field(() => String) body!: string;
+}
+
+@InputType('MessagesPageInput')
+export class MessagesPageInput {
+  @Field(() => ID) withUserId!: string;
+  @Field(() => ID, { nullable: true }) cursor?: string;
+  @Field(() => Int, { nullable: true }) take?: number;
+}
+
+@ObjectType('UnreadByUser')
+export class UnreadByUserGql {
+  @Field(() => ID) userId!: string;
+  @Field(() => Int) count!: number;
+}
+
+@ObjectType('UnreadSummary')
+export class UnreadSummaryGql {
+  @Field(() => Int) total!: number;
+  @Field(() => [UnreadByUserGql]) byUser!: UnreadByUserGql[];
 }

@@ -42,3 +42,26 @@ export const SEARCH_USERS = gql`
     }
   }
 `;
+
+export const MESSAGES = gql`
+  query Messages($input: MessagesPageInput!) {
+    messages(input: $input) {
+      id
+      fromUserId
+      toUserId
+      body
+      createdAt
+      readAt
+    }
+  }
+`;
+
+export const UNREAD_SUMMARY = gql`
+  query UnreadSummary {
+    unreadSummary {
+      total
+      byUser { userId count }
+    }
+  }
+`;
+

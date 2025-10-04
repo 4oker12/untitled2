@@ -39,4 +39,30 @@ export class MessagesService {
         if (msg.toUserId !== meId) throw new ForbiddenException('Only recipient can mark read');
         return this.prisma.message.update({ where: { id }, data: { readAt: new Date() } });
     }
+
+    // внутри export class MessagesService { ... }
+
+    async unreadTotal(userId: string) {
+        return this.prisma.message.count({
+            where: { toUserId: userId, readAt: null },
+        });
+    }
+
+    async unreadByUser(userId: string) {
+        const rows = await this.prisma.message.groupBy({
+            by: ['fromUserId'],
+            where: { toUserId: userId, readAt: null },
+            _count: { _all: true },
+        });
+        return rows.map(r => ({ userId: r.fromUserId, count: r._count._all }));
+    }
+
+    async unreadSummary(userId: string) {
+        const [total, byUser] = await Promise.all([
+            this.unreadTotal(userId),
+            this.unreadByUser(userId),
+        ]);
+        return { total, byUser };
+    }
+
 }

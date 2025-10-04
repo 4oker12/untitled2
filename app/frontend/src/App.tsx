@@ -9,6 +9,8 @@ import { RequireAuth } from './auth/RequireAuth';
 import { RequireRole } from './auth/RequireRole';
 import { Navbar } from './components/Navbar';
 import { FriendsPage } from './pages/FriendsPage';
+import { NotifBell } from './components/NotifBell';
+import { MessagesPage} from "./pages/MessagesPage";
 
 export const App: React.FC = () => {
   return (
@@ -22,6 +24,7 @@ export const App: React.FC = () => {
         <Route path="/friends" element={<RequireAuth><FriendsPage /></RequireAuth>} />
         <Route path="/admin/users" element={<RequireAuth><RequireRole role="ADMIN"><AdminUsersPage /></RequireRole></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />
+          <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} /> {/* [ADD] */}
       </Routes>
     </div>
   );

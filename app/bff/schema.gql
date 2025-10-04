@@ -37,6 +37,25 @@ enum FriendRequestStatus {
   CANCELED
 }
 
+type Message {
+  id: ID!
+  fromUserId: ID!
+  toUserId: ID!
+  body: String!
+  createdAt: String!
+  readAt: String
+}
+
+type UnreadByUser {
+  userId: ID!
+  count: Int!
+}
+
+type UnreadSummary {
+  total: Int!
+  byUser: [UnreadByUser!]!
+}
+
 type Query {
   health: String!
   ping: String!
@@ -44,6 +63,14 @@ type Query {
   friendsSvc: [User!]!
   friendRequests(direction: String): [FriendRequest!]!
   searchUsers(q: String!): [User!]!
+  messages(input: MessagesPageInput!): [Message!]!
+  unreadSummary: UnreadSummary!
+}
+
+input MessagesPageInput {
+  withUserId: ID!
+  cursor: ID
+  take: Int
 }
 
 type Mutation {
@@ -52,10 +79,12 @@ type Mutation {
   register(input: RegisterInput!): User!
   login(input: LoginInput!): AuthPayload!
   sendFriendRequest(input: SendFriendRequestInput!): FriendRequest!
-  acceptFriendRequest(id: String!): FriendRequest!
-  declineFriendRequest(id: String!): FriendRequest!
-  cancelFriendRequest(id: String!): FriendRequest!
-  removeFriend(userId: String!): Boolean!
+  acceptFriendRequest(id: ID!): FriendRequest!
+  declineFriendRequest(id: ID!): FriendRequest!
+  cancelFriendRequest(id: ID!): FriendRequest!
+  removeFriend(userId: ID!): Boolean!
+  sendMessage(input: SendMessageInput!): Message!
+  markMessageRead(id: ID!): Message!
 }
 
 input RegisterInput {
@@ -73,4 +102,9 @@ input LoginInput {
 input SendFriendRequestInput {
   userId: String
   toHandle: String
+}
+
+input SendMessageInput {
+  toUserId: ID!
+  body: String!
 }

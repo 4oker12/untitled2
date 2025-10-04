@@ -83,3 +83,31 @@ export const CANCEL_FRIEND_REQUEST = gql`
     cancelFriendRequest(id: $id) { id status }
   }
 `;
+
+export const REMOVE_FRIEND = gql`
+  mutation RemoveFriend($userId: ID!) {
+    removeFriend(userId: $userId)
+  }
+`;
+
+export const SEND_MESSAGE = gql`
+  mutation SendMessage($input: SendMessageInput!) {
+    sendMessage(input: $input) {
+      id
+      fromUserId
+      toUserId
+      body
+      createdAt
+      readAt
+    }
+  }
+`;
+
+export const MARK_MESSAGE_READ = gql`
+  mutation MarkMessageRead($id: ID!) {
+    markMessageRead(id: $id) {
+      id
+      readAt
+    }
+  }
+`;

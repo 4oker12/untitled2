@@ -2,7 +2,7 @@
 // CHANGED: GraphQL-резолвер дергает FriendsService (который ходит в BackendClient);
 //          аккуратно распаковываем { data }, нигде не делаем .map на объекте.
 
-import { Resolver, Query, Mutation, Args, Context } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, ID, Args, Context } from '@nestjs/graphql';
 import { FriendsService } from './friends.service';
 import {
     FriendRequestGql,
@@ -87,31 +87,37 @@ export class FriendsResolver {
     }
 
     @Mutation(() => FriendRequestGql)
-    async acceptFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+    async acceptFriendRequest(  @Args('id', { type: () => ID }) id: string,     // ← ТАК
+        @Context() ctx?: any): Promise<FriendRequestGql> {
         const raw = await this.friends.accept(id, ctx);        // CHANGED
         const one = unwrapOne<any>(raw);                       // CHANGED
         return toFriendReqGql(one);
     }
 
     @Mutation(() => FriendRequestGql)
-    async declineFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+    async declineFriendRequest
+     (@Args('id', { type: () => ID }) id: string,
+     @Context() ctx?: any): Promise<FriendRequestGql> {
         const raw = await this.friends.decline(id, ctx);       // CHANGED
         const one = unwrapOne<any>(raw);                       // CHANGED
         return toFriendReqGql(one);
     }
 
     @Mutation(() => FriendRequestGql)
-    async cancelFriendRequest(@Args('id') id: string, @Context() ctx?: any): Promise<FriendRequestGql> {
+    async cancelFriendRequest(@Args('id', { type: () => ID }) id: string,
+                              @Context() ctx?: any): Promise<FriendRequestGql> {
         const raw = await this.friends.cancel(id, ctx);        // CHANGED
         const one = unwrapOne<any>(raw);                       // CHANGED
         return toFriendReqGql(one);
     }
 
     @Mutation(() => Boolean)
-    async removeFriend(@Args('userId') userId: string, @Context() ctx?: any): Promise<boolean> {
-        const raw = await this.friends.removeFriend(userId, ctx); // CHANGED
-        const val = unwrapOne<any>(raw);                          // CHANGED
-        return val === true || val?.data === true;
+    async removeFriend(
+        @Args('userId', { type: () => ID }) userId: string,
+        @Context() ctx?: any,
+    ): Promise<boolean> {
+        await this.friends.removeFriend(userId, ctx);
+        return true;
     }
 
     @Query(() => [UserGql])
