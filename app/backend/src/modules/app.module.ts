@@ -6,6 +6,8 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { FriendsModule } from './friends/friends.module.js';
 import { MessagesModule } from './messages/messages.module.js';
+import { ProfileModule } from './profile/profile.module.js';
+
 
 @Module({
   imports: [
@@ -15,6 +17,7 @@ import { MessagesModule } from './messages/messages.module.js';
     AuthModule,
     FriendsModule,
     MessagesModule,
+    ProfileModule
   ],
 })
 export class AppModule {}

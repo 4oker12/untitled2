@@ -1,5 +1,4 @@
-// app/backend/src/modules/auth/friends.users.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsEnum,
@@ -7,6 +6,7 @@ import {
   IsString,
   Length,
   MinLength,
+  Matches,
 } from 'class-validator';
 
 export enum Role {
@@ -36,6 +36,36 @@ export class RegisterDto {
   @IsString()
   @Length(1, 100)
   name?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  phone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  location?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  language?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  timezone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 512)
+  bio?: string | null;
 }
 
 export class LoginDto {
@@ -48,5 +78,53 @@ export class LoginDto {
   password!: string;
 }
 
+export class UpdateProfileDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string | null;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  name?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(3, 32)
+  @Matches(/^[a-z0-9_\.]+$/)
+  handle?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  phone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  location?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  language?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 64)
+  timezone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(0, 512)
+  bio?: string | null;
+}
 

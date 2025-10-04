@@ -39,6 +39,7 @@ model User {
   messagesReceived Message[] @relation("MessageTo")
 
   refreshTokens RefreshToken[] // [ADDED] обратная сторона связи с RefreshToken
+  profile       Profile?
 }
 
 model RefreshToken {
@@ -82,5 +83,18 @@ model Message {
   to   User @relation("MessageTo",   fields: [toUserId],   references: [id])
 
   @@index([fromUserId, toUserId, createdAt])
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  bio       String?
+  location  String?
+  website   String?
+  birthday  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
