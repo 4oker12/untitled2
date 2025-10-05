@@ -1,130 +1,41 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsEnum,
-  IsOptional,
-  IsString,
-  Length,
-  MinLength,
-  Matches,
-} from 'class-validator';
-
-export enum Role {
-  ADMIN = 'ADMIN',
-  USER = 'USER',
-}
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user1@example.com' })
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'User1234!', minLength: 8 })
+  @ApiProperty({ minLength: 6 })
   @IsString()
-  @MinLength(8)
+  @MinLength(6)
   password!: string;
 
-  // ▼▼▼ ADDED: никнейм пользователя (обязателен при регистрации)
-  @ApiProperty({ example: 'john_doe' })
-  @IsString()
-  @Length(3, 32)
-  handle!: string;
-  // ▲▲▲
-
-  @ApiProperty({ example: 'User One', required: false, nullable: true, minLength: 1, maxLength: 100 })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @Length(1, 100)
-  name?: string | null;
+  name?: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiProperty({ required: false, description: 'Unique handle (optional)' })
   @IsOptional()
   @IsString()
-  @Length(0, 64)
-  phone?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 120)
-  location?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 64)
-  language?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 64)
-  timezone?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 512)
-  bio?: string | null;
+  handle?: string;
 }
 
 export class LoginDto {
-  @ApiProperty({ example: 'user1@example.com' })
+  @ApiProperty()
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'User1234!' })
+  @ApiProperty()
   @IsString()
   password!: string;
 }
 
-export class UpdateProfileDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsEmail()
-  email?: string | null;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  name?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(3, 32)
-  @Matches(/^[a-z0-9_\.]+$/)
-  handle?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 64)
-  phone?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 120)
-  location?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 64)
-  language?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 64)
-  timezone?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @IsString()
-  @Length(0, 512)
-  bio?: string | null;
+export class AuthUserDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() email!: string;
+  @ApiProperty({ required: false, nullable: true }) name!: string | null;
+  @ApiProperty({ required: false, nullable: true }) handle!: string | null;
+  @ApiProperty({ enum: ['ADMIN', 'USER'] }) role!: 'ADMIN' | 'USER';
 }
-

@@ -1,7 +1,7 @@
 // src/modules/messages/messages.controller.ts
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
-import { JwtGuard } from '../../common/jwt.guard.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { MessagesService } from './messages.service.js';
 

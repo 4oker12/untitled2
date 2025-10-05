@@ -1,48 +1,85 @@
-// app/backend/src/modules/auth/auth.service.ts
-import { Injectable } from '@nestjs/common';
-import type { SignOptions } from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-
-import { ConfigService } from '../../config/config.service.js';
-import { signJwt, verifyJwt, type JwtPayload } from '../../common/jwt.js';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { PrismaClient, Role } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly config: ConfigService) {}
+  private prisma = new PrismaClient();
 
-  // --- password helpers ---
-  async hashPassword(password: string) {
-    return bcrypt.hash(password, 12);
+  constructor(private readonly jwt: JwtService) {}
+
+  private toView(user: any) {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name ?? null,
+      handle: user.handle ?? null,
+      role: user.role as 'ADMIN' | 'USER',
+    };
   }
 
-  async comparePassword(password: string, hash: string) {
-    return bcrypt.compare(password, hash);
+  async register(params: { email: string; password: string; name?: string; handle?: string }) {
+    const existing = await this.prisma.user.findUnique({ where: { email: params.email } });
+    if (existing) throw new ConflictException('Email already in use');
+
+    const passwordHash = await bcrypt.hash(params.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: params.email,
+        passwordHash,
+        name: params.name ?? null,
+        handle: params.handle ?? null,
+        role: Role.USER,
+      },
+    });
+
+    const tokens = await this.issueTokens(user);
+    return { user: this.toView(user), ...tokens };
   }
 
-  // --- token helpers (RS256) ---
-  issueAccessToken(sub: string, role: 'ADMIN' | 'USER') {
-    const payload: JwtPayload = { sub, role, type: 'access' };
-    return signJwt(
-        payload,
-        this.config.accessPrivateKey,
-        this.config.accessTtl as SignOptions['expiresIn'],
+  async login(params: { email: string; password: string }) {
+    const user = await this.prisma.user.findUnique({ where: { email: params.email } });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    const ok = await bcrypt.compare(params.password, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    const tokens = await this.issueTokens(user);
+    return { user: this.toView(user), ...tokens };
+  }
+
+  async refresh(refreshToken: string) {
+    try {
+      const payload = this.jwt.verify(refreshToken);
+      if (payload?.type !== 'refresh') throw new UnauthorizedException();
+      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+      if (!user) throw new UnauthorizedException();
+      const tokens = await this.issueTokens(user);
+      return { user: this.toView(user), ...tokens };
+    } catch {
+      throw new UnauthorizedException();
+    }
+  }
+
+  async logout() {
+    // При куки-стратегии достаточно обнулить куки в контроллере
+    return { ok: true };
+  }
+
+  private async issueTokens(user: { id: string; role: Role }) {
+    const base = { sub: user.id, role: user.role as 'ADMIN' | 'USER' };
+
+    const accessToken = await this.jwt.signAsync(
+        { ...base, type: 'access' },
+        { expiresIn: '15m' },
     );
-  }
 
-  issueRefreshToken(sub: string, role: 'ADMIN' | 'USER') {
-    const payload: JwtPayload = { sub, role, type: 'refresh' };
-    return signJwt(
-        payload,
-        this.config.refreshPrivateKey,
-        this.config.refreshTtl as SignOptions['expiresIn'],
+    const refreshToken = await this.jwt.signAsync(
+        { ...base, type: 'refresh' },
+        { expiresIn: '7d' },
     );
-  }
 
-  verifyAccessToken(token: string) {
-    return verifyJwt<JwtPayload>(token, this.config.accessPublicKey);
-  }
-
-  verifyRefreshToken(token: string) {
-    return verifyJwt<JwtPayload>(token, this.config.refreshPublicKey);
+    return { accessToken, refreshToken };
   }
 }

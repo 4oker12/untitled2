@@ -1,7 +1,7 @@
 // src/modules/friends/friends.controller.ts
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtGuard } from '../../common/jwt.guard.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { FriendsService } from './friends.service.js';
 import { CreateFriendRequestDto, FriendRequestDto, PublicUserDto } from './friends.dto.js';

@@ -1,12 +1,12 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { Reflector } from '@nestjs/core';
-import { verifyJwt, type JwtPayload } from './jwt.js';
-import { ConfigService } from '../config/config.service.js';
-import { PUBLIC_KEY } from './public.decorator.js';
+import { verifyJwt, type JwtPayload } from '../../common/jwt.js';
+import { ConfigService } from '../../config/config.service.js';
+import { PUBLIC_KEY } from '../../common/public.decorator.js';
 
 @Injectable()
-export class JwtGuard implements CanActivate {
+export class JwtAuthGuard implements CanActivate {
     constructor(private readonly config: ConfigService, private readonly reflector: Reflector) {}
 
     canActivate(ctx: ExecutionContext): boolean {

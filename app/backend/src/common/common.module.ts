@@ -2,14 +2,14 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '../config/config.module.js';
-import { JwtGuard} from "./jwt.guard.js";
+import { JwtAuthGuard} from "../modules/auth/jwt-auth.guard.js";
 
 @Global()
 @Module({
     imports: [ConfigModule],
     providers: [
         // регистрируем как глобальный guard
-        { provide: APP_GUARD, useClass: JwtGuard },
+        { provide: APP_GUARD, useClass: JwtAuthGuard },
     ],
     exports: [],
 })

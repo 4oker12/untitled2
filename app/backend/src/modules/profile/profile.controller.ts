@@ -1,7 +1,7 @@
 // app/backend/src/modules/profile/profile.controller.ts
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtGuard } from '../../common/jwt.guard.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { ProfileService } from './profile.service.js';
 import { ProfileDto, UpdateProfileDto } from './profile.dto.js';
