@@ -1,10 +1,16 @@
 // src/modules/friends/friends.controller.ts
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { FriendsService } from './friends.service.js';
-import { CreateFriendRequestDto, FriendRequestDto, PublicUserDto } from './friends.dto.js';
+import {
+    CreateFriendRequestDto,
+    FriendRequestDto,
+    PublicUserDto,
+    SearchUsersQueryDto,
+} from './friends.dto.js';
+
+const ok = <T>(data: T) => ({ data });
 
 @ApiTags('friends')
 @ApiCookieAuth('cookie-auth')
@@ -12,11 +18,24 @@ import { CreateFriendRequestDto, FriendRequestDto, PublicUserDto } from './frien
 export class FriendsController {
     constructor(private readonly service: FriendsService) {}
 
+    /** Список друзей текущего пользователя */
     @Get()
     @ApiResponse({ status: 200 })
     async list(@CurrentUser() user: CurrentUserPayload): Promise<{ data: PublicUserDto[] }> {
         const data = await this.service.list(user.sub);
-        return { data };
+        return ok(data);
+    }
+
+    /** Поиск пользователей для добавления в друзья (минимум 2 символа) */
+    @Get('search/users')
+    @ApiResponse({ status: 200 })
+    async search(
+        @CurrentUser() user: CurrentUserPayload,
+        @Query() q: SearchUsersQueryDto,
+    ): Promise<{ data: { items: PublicUserDto[]; nextCursor?: string } }> {
+        if (!q.q || q.q.length < 2) return ok({ items: [], nextCursor: undefined });
+        const data = await this.service.searchUsers(user.sub, q.q, q.cursor, q.take);
+        return ok(data);
     }
 
     @Get('requests')
@@ -26,7 +45,7 @@ export class FriendsController {
         @Query('type') type?: 'incoming' | 'outgoing',
     ): Promise<{ data: FriendRequestDto[] }> {
         const data = await this.service.listRequests(user.sub, type);
-        return { data };
+        return ok(data);
     }
 
     @Post('requests')
@@ -36,24 +55,24 @@ export class FriendsController {
         @Body() dto: CreateFriendRequestDto,
     ): Promise<{ data: FriendRequestDto }> {
         const data = await this.service.createRequest(user.sub, dto);
-        return { data };
+        return ok(data);
     }
 
     @Post('requests/:id/accept')
     async accept(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
         const data = await this.service.accept(user.sub, id);
-        return { data };
+        return ok(data);
     }
 
     @Post('requests/:id/decline')
     async decline(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
         const data = await this.service.decline(user.sub, id);
-        return { data };
+        return ok(data);
     }
 
     @Delete('requests/:id')
     async cancel(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
         const data = await this.service.cancel(user.sub, id);
-        return { data };
+        return ok(data);
     }
 }

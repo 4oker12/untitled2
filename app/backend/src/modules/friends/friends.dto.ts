@@ -1,6 +1,6 @@
-// [NEW] app/backend/src/modules/friends/friends.friends.users.auth.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
+// src/modules/friends/friends.dto.ts
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from 'class-validator';
 
 export class PublicUserDto {
     @ApiProperty() id!: string;
@@ -31,4 +31,24 @@ export class CreateFriendRequestDto {
     @IsString()
     @Length(3)
     toHandle!: string;
+}
+
+/** Query DTO для /friends/search/users */
+export class SearchUsersQueryDto {
+    @ApiPropertyOptional({ description: 'Search by handle or name', example: 'puerto' })
+    @IsOptional()
+    @IsString()
+    @Length(2, 64)
+    q?: string;
+
+    @ApiPropertyOptional({ description: 'Cursor (last user id)', example: 'cmg1...' })
+    @IsOptional()
+    @IsString()
+    cursor?: string;
+
+    @ApiPropertyOptional({ description: 'Page size (1..100)', example: 20, default: 20 })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    take?: number = 20;
 }
