@@ -1,15 +1,23 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaClient, Role } from '@prisma/client';
+import { ConfigService } from '../../config/config.service.js';
+import { signJwt, verifyJwt } from '../../common/jwt.js';
+
+type UserView = {
+  id: string;
+  email: string;
+  name: string | null;
+  handle: string | null;
+  role: 'ADMIN' | 'USER';
+};
 
 @Injectable()
 export class AuthService {
   private prisma = new PrismaClient();
+  constructor(private readonly config: ConfigService) {}
 
-  constructor(private readonly jwt: JwtService) {}
-
-  private toView(user: any) {
+  private toView(user: any): UserView {
     return {
       id: user.id,
       email: user.email,
@@ -51,7 +59,8 @@ export class AuthService {
 
   async refresh(refreshToken: string) {
     try {
-      const payload = this.jwt.verify(refreshToken);
+      // RS256 verify refresh
+      const payload = verifyJwt(refreshToken, this.config.refreshPublicKey);
       if (payload?.type !== 'refresh') throw new UnauthorizedException();
       const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
       if (!user) throw new UnauthorizedException();
@@ -63,21 +72,22 @@ export class AuthService {
   }
 
   async logout() {
-    // При куки-стратегии достаточно обнулить куки в контроллере
     return { ok: true };
   }
 
   private async issueTokens(user: { id: string; role: Role }) {
     const base = { sub: user.id, role: user.role as 'ADMIN' | 'USER' };
 
-    const accessToken = await this.jwt.signAsync(
+    // ⬇️ третьим аргументом — TTL строкой/числом, БЕЗ объекта { expiresIn }
+    const accessToken = signJwt(
         { ...base, type: 'access' },
-        { expiresIn: '15m' },
+        this.config.accessPrivateKey,
+        this.config.accessTtl,   // string, например '15m'
     );
-
-    const refreshToken = await this.jwt.signAsync(
+    const refreshToken = signJwt(
         { ...base, type: 'refresh' },
-        { expiresIn: '7d' },
+        this.config.refreshPrivateKey,
+        this.config.refreshTtl,  // string, например '7d'
     );
 
     return { accessToken, refreshToken };

@@ -19,11 +19,15 @@ export class JwtAuthGuard implements CanActivate {
 
         const req = ctx.switchToHttp().getRequest<Request>();
         const token = this.bearerOrCookie(req);
-        if (!token) throw new UnauthorizedException('Missing access token');
+        if (!token) throw new UnauthorizedException('Invalid token');
 
-        let payload: JwtPayload;
-        try { payload = verifyJwt<JwtPayload>(token, this.config.accessPublicKey); }
-        catch { throw new UnauthorizedException('Invalid token'); }
+        let payload: JwtPayload | undefined;
+        try {
+            // RS256 верификация access токена
+            payload = verifyJwt<JwtPayload>(token, this.config.accessPublicKey);
+        } catch {
+            throw new UnauthorizedException('Invalid token');
+        }
 
         if (!payload?.sub) throw new UnauthorizedException('Invalid payload');
         (req as any).user = payload; // для @CurrentUser()
@@ -33,7 +37,12 @@ export class JwtAuthGuard implements CanActivate {
     private bearerOrCookie(req: Request): string | null {
         const h = req.header('authorization') ?? '';
         if (h.startsWith('Bearer ')) return h.slice(7).trim() || null;
-        const c = (req as any).cookies?.['access_token'] as string | undefined;
-        return c?.trim() || null;
+
+        // читаем куки, которые ставит auth.controller (camelCase)
+        // поддержим и старое snake_case на всякий случай
+        const c =
+            (req as any).cookies?.['accessToken'] ||
+            (req as any).cookies?.['access_token'];
+        return (typeof c === 'string' ? c.trim() : null) || null;
     }
 }

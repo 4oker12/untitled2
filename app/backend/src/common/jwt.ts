@@ -14,24 +14,21 @@ const normalizePem = (s: string) => s.replace(/\\n/g, '\n');
 /**
  * Подписывает JWT (RS256). Совместимо с jsonwebtoken v9.
  * @param payload - полезная нагрузка токена
- * @param privateKeyPem - приватный ключ в PEM-формате (строка)
- * @param ttl - срок жизни ('15m' | '7d' | число секунд)
+ * @param privateKeyPem - приватный ключ в PEM
+ * @param expiresIn - ttl (строка вида '15m' | '7d' или число секунд)
  */
 export function signJwt(
-    payload: JwtPayload,
+    payload: object,
     privateKeyPem: string,
-    ttl: SignOptions['expiresIn']
+    expiresIn?: string | number, // <-- так
 ): string {
-  const opts: SignOptions = {
-    algorithm: 'RS256',
-    expiresIn: ttl,
-  };
-  return jwt.sign(payload, normalizePem(privateKeyPem), opts);
+  const opts: SignOptions = { algorithm: 'RS256' };
+  if (expiresIn !== undefined) (opts as any).expiresIn = expiresIn;
+  return jwt.sign(payload, privateKeyPem.replace(/\\n/g, '\n'), opts);
 }
 
 /**
- * Проверяет/декодирует JWT (RS256).
- * Возвращает типизированный payload.
+ * Проверяет JWT (RS256) и возвращает типизированный payload.
  */
 export function verifyJwt<T extends object = JwtPayload>(
     token: string,
@@ -40,7 +37,6 @@ export function verifyJwt<T extends object = JwtPayload>(
   const opts: VerifyOptions = { algorithms: ['RS256'] };
   const decoded = jwt.verify(token, normalizePem(publicKeyPem), opts);
   if (typeof decoded === 'string') {
-    // На RS256 почти не встречается, но на всякий случай:
     return JSON.parse(decoded) as T;
   }
   return decoded as T;
