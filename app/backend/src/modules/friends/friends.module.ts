@@ -1,15 +1,16 @@
-// [NEW] app/backend/src/modules/friends/friends.module.ts
+// src/modules/friends/friends.module.ts
 import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../prisma/prisma.module.js';
+import { AuthModule } from '../auth/auth.module.js'; // может больше не нужен — см. сервис
+import { ConfigModule} from "../../config/config.module.js";
+// import { ConfigModule } from '../../config/config.module.js'; // если вынес в src/config
+
 import { FriendsController } from './friends.controller.js';
 import { FriendsService } from './friends.service.js';
-import { UsersModule } from '../users/users.module.js';
-import { AuthModule } from '../auth/auth.module.js';
-import { PrismaModule } from '../../prisma/prisma.module.js'; // где у тебя лежит PrismaModule
 
 @Module({
-    imports: [PrismaModule, UsersModule, AuthModule],
+    imports: [PrismaModule, ConfigModule],
     controllers: [FriendsController],
     providers: [FriendsService],
-    exports: [FriendsService],
 })
 export class FriendsModule {}

@@ -5,10 +5,12 @@ import { AuthService } from './auth.service.js';
 import { UsersService } from '../users/users.service.js';
 import { UserDto } from '../users/users.dto.js';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { RegisterDto, LoginDto } from './dto.js';
+import { RegisterDto, LoginDto } from './auth.dto';
 // [ADDED]
 import { setAuthCookies, clearAuthCookies } from '../../common/cookies.js';
-import { ConfigService } from '../config/config.service.js';
+import { ConfigService } from '../../config/config.service.js';
+import { Public } from '../../common/public.decorator.js';
+
 
 @ApiTags('auth')
 @Controller('auth')
@@ -20,7 +22,7 @@ export class AuthController {
       private readonly config: ConfigService,
   ) {}
 
-  @Post('register')
+  @Public() @Post('register')
   @ApiResponse({ status: 201, description: 'User registered', type: UserDto })
   async register(@Body() body: RegisterDto, @Res() res: Response) {
     const { email, password, name, handle } = body;
@@ -53,7 +55,7 @@ export class AuthController {
     });
   }
 
-  @Post('login')
+  @Public() @Post('login')
   @HttpCode(200)
   @ApiResponse({ status: 200, description: 'Logged in', type: UserDto })
   async login(@Body() body: LoginDto, @Res() res: Response) {
@@ -105,7 +107,7 @@ export class AuthController {
     }
   }
 
-  @Post('refresh')
+  @Public() @Post('refresh')
   @HttpCode(200)
   @ApiCookieAuth('access_token')
   async refresh(@Req() req: Request, @Res() res: Response) {
@@ -113,7 +115,7 @@ export class AuthController {
     return res.json({ data: { ok: true } });
   }
 
-  @Post('logout')
+  @Public() @Post('logout')
   @HttpCode(200)
   @ApiCookieAuth('access_token')
   async logout(@Res() res: Response) {

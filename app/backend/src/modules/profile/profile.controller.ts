@@ -1,28 +1,44 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
-import type { Request } from 'express';
+// app/backend/src/modules/profile/profile.controller.ts
+import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-
+import { JwtGuard } from '../../common/jwt.guard.js';
+import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { ProfileService } from './profile.service.js';
 import { ProfileDto, UpdateProfileDto } from './profile.dto.js';
 
+const toDto = (u: any): ProfileDto => ({
+    id: u.id,
+    email: u.email,
+    name: u.name ?? null,
+    role: u.role,
+    handle: u.handle ?? null,
+});
+
 @ApiTags('profile')
-@ApiCookieAuth('access_token')
+@ApiCookieAuth('cookie-auth')
 @Controller('profile')
 export class ProfileController {
-    constructor(private readonly service: ProfileService) {}
+    constructor(private readonly profile: ProfileService) {}
 
-    @Get('me')
-    @ApiResponse({ status: 200, type: ProfileDto })
-    async getMyProfile(@Req() req: Request): Promise<{ data: ProfileDto }> {
-        return this.service.getMyProfile(req);
+    /** Текущий пользователь */
+    @Get()
+    @ApiResponse({ status: 200, description: 'Current user profile', type: ProfileDto })
+    async me(@CurrentUser() user: CurrentUserPayload): Promise<{ data: ProfileDto }> {
+        const u = await this.profile.getById(user.sub);
+        return { data: toDto(u) };
     }
 
-    @Patch('me')
-    @ApiResponse({ status: 200, type: ProfileDto })
-    async updateMyProfile(
-        @Req() req: Request,
-        @Body() body: UpdateProfileDto,
+    /** Обновить своё имя / handle */
+    @Patch()
+    @ApiResponse({ status: 200, description: 'Profile updated', type: ProfileDto })
+    async updateMe(
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() dto: UpdateProfileDto,
     ): Promise<{ data: ProfileDto }> {
-        return this.service.updateMyProfile(req, body);
+        const u = await this.profile.update(user.sub, {
+            name: dto.name ?? undefined,
+            handle: dto.handle ?? undefined,
+        });
+        return { data: toDto(u) };
     }
 }

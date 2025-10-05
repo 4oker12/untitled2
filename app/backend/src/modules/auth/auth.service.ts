@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import type { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
-import { ConfigService } from '../config/config.service.js';
+import { ConfigService } from '../../config/config.service.js';
 import { signJwt, verifyJwt, type JwtPayload } from '../../common/jwt.js';
 
 @Injectable()

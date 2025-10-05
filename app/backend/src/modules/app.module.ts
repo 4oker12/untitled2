@@ -1,6 +1,7 @@
 // app/backend/src/modules/app.module.ts
 import { Module } from '@nestjs/common';
-import { ConfigModule } from './config/config.module.js';
+import { ConfigModule } from '../config/config.module.js';
+import {CommonModule} from "../common/common.module.js";
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -13,6 +14,7 @@ import { ProfileModule } from './profile/profile.module.js';
   imports: [
     ConfigModule,   // << твой собственный конфиг
     PrismaModule,
+    CommonModule,
     UsersModule,
     AuthModule,
     FriendsModule,

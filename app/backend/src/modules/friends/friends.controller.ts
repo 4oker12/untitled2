@@ -1,76 +1,59 @@
 // src/modules/friends/friends.controller.ts
-
-import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtGuard } from '../../common/jwt.guard.js';
+import { CurrentUser, type CurrentUserPayload } from '../../common/current-user.decorator.js';
 import { FriendsService } from './friends.service.js';
 import { CreateFriendRequestDto, FriendRequestDto, PublicUserDto } from './friends.dto.js';
 
 @ApiTags('friends')
-@ApiCookieAuth('access_token')
+@ApiCookieAuth('cookie-auth')
 @Controller('friends')
 export class FriendsController {
     constructor(private readonly service: FriendsService) {}
 
     @Get()
     @ApiResponse({ status: 200 })
-    async listFriends(@Req() req: Request): Promise<{ data: PublicUserDto[] }> {
-        const { data } = await this.service.listFriends(req); // CHANGED: деструктурируем
+    async list(@CurrentUser() user: CurrentUserPayload): Promise<{ data: PublicUserDto[] }> {
+        const data = await this.service.list(user.sub);
         return { data };
     }
 
     @Get('requests')
     @ApiResponse({ status: 200 })
     async listRequests(
-        @Req() req: Request,
+        @CurrentUser() user: CurrentUserPayload,
         @Query('type') type?: 'incoming' | 'outgoing',
     ): Promise<{ data: FriendRequestDto[] }> {
-        const { data } = await this.service.listRequests(req, type); // CHANGED
+        const data = await this.service.listRequests(user.sub, type);
         return { data };
     }
 
     @Post('requests')
     @ApiResponse({ status: 201 })
     async createRequest(
-        @Req() req: Request,
-        @Body() body: CreateFriendRequestDto,
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() dto: CreateFriendRequestDto,
     ): Promise<{ data: FriendRequestDto }> {
-        const { data } = await this.service.createRequest(req, body); // CHANGED
+        const data = await this.service.createRequest(user.sub, dto);
         return { data };
     }
 
     @Post('requests/:id/accept')
-    @ApiResponse({ status: 200 })
-    async accept(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
-        const { data } = await this.service.accept(req, id); // CHANGED: тип возвращаемого согласован
+    async accept(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+        const data = await this.service.accept(user.sub, id);
         return { data };
     }
 
     @Post('requests/:id/decline')
-    @ApiResponse({ status: 200 })
-    async decline(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
-        const { data } = await this.service.decline(req, id); // CHANGED
+    async decline(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+        const data = await this.service.decline(user.sub, id);
         return { data };
     }
 
-    @Post('requests/:id/cancel')
-    @ApiResponse({ status: 200 })
-    async cancel(@Req() req: Request, @Param('id') id: string): Promise<{ data: FriendRequestDto }> {
-        const { data } = await this.service.cancel(req, id); // CHANGED: метод добавлен в сервис
-        return { data };
-    }
-
-    @Delete(':userId')
-    @ApiResponse({ status: 200 })
-    async remove(@Req() req: Request, @Param('userId') userId: string): Promise<{ data: boolean }> {
-        return this.service.removeFriend(req, userId); // OK
-    }
-
-    // Не нужен? — можно удалить весь endpoint.
-    @Get('search/users')
-    @ApiResponse({ status: 200 })
-    async searchUsers(@Query('q') q: string): Promise<{ data: PublicUserDto[] }> {
-        const { data } = await this.service.searchUsers(q); // CHANGED
+    @Delete('requests/:id')
+    async cancel(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+        const data = await this.service.cancel(user.sub, id);
         return { data };
     }
 }

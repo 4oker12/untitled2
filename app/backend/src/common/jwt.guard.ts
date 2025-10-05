@@ -1,68 +1,39 @@
-// app/backend/src/common/jwt.guard.ts
-import {
-    CanActivate,
-    ExecutionContext,
-    Injectable,
-    UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
-
+import { Reflector } from '@nestjs/core';
 import { verifyJwt, type JwtPayload } from './jwt.js';
-import { ConfigService } from '../modules/config/config.service.js';
+import { ConfigService } from '../config/config.service.js';
+import { PUBLIC_KEY } from './public.decorator.js';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-    constructor(private readonly config: ConfigService) {}
+    constructor(private readonly config: ConfigService, private readonly reflector: Reflector) {}
 
-    canActivate(context: ExecutionContext): boolean {
-        const req = context.switchToHttp().getRequest<Request>();
+    canActivate(ctx: ExecutionContext): boolean {
+        // пропускаем публичные ручки
+        const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [
+            ctx.getHandler(),
+            ctx.getClass(),
+        ]);
+        if (isPublic) return true;
 
-        const token = this.extractToken(req);
-        if (!token) {
-            throw new UnauthorizedException('Missing Authorization header');
-        }
+        const req = ctx.switchToHttp().getRequest<Request>();
+        const token = this.bearerOrCookie(req);
+        if (!token) throw new UnauthorizedException('Missing access token');
 
-        const pub = this.config.accessPublicKey;
-        if (!pub) {
-            throw new UnauthorizedException(
-                'Server misconfigured: access public key is missing',
-            );
-        }
+        let payload: JwtPayload;
+        try { payload = verifyJwt<JwtPayload>(token, this.config.accessPublicKey); }
+        catch { throw new UnauthorizedException('Invalid token'); }
 
-        try {
-            const payload = verifyJwt<JwtPayload>(token, pub);
-            (req as any).user = {
-                id: payload.sub,
-                role: payload.role,
-                jti: payload.jti,
-                type: payload.type,
-            };
-            return true;
-        } catch {
-            throw new UnauthorizedException('Invalid or expired token');
-        }
+        if (!payload?.sub) throw new UnauthorizedException('Invalid payload');
+        (req as any).user = payload; // для @CurrentUser()
+        return true;
     }
 
-    private extractToken(req: Request): string | null {
-        // 1) Authorization: Bearer <token> ИЛИ просто <token>
-        const raw =
-            (req.headers['authorization'] ??
-                (req.headers as any)['Authorization']) as
-                | string
-                | string[]
-                | undefined;
-
-        if (raw) {
-            const header = Array.isArray(raw) ? raw[0] : raw;
-            const parts = header.trim().split(' ');
-            const t = parts.length === 2 ? parts[1] : parts[0];
-            if (t) return t;
-        }
-
-        // 2) cookie: access_token=<token>
-        const cookie = (req as any).cookies?.['access_token'] as string | undefined;
-        if (cookie && cookie.trim()) return cookie.trim();
-
-        return null;
+    private bearerOrCookie(req: Request): string | null {
+        const h = req.header('authorization') ?? '';
+        if (h.startsWith('Bearer ')) return h.slice(7).trim() || null;
+        const c = (req as any).cookies?.['access_token'] as string | undefined;
+        return c?.trim() || null;
     }
 }

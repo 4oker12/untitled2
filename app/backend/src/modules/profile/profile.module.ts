@@ -1,13 +1,13 @@
+// app/backend/src/modules/profile/profile.module.ts
 import { Module } from '@nestjs/common';
-
 import { PrismaModule } from '../../prisma/prisma.module.js';
-import { AuthModule } from '../auth/auth.module.js';
+import { ConfigModule } from '../../config/config.module.js'; // << добавили
 import { ProfileController } from './profile.controller.js';
 import { ProfileService } from './profile.service.js';
 
 @Module({
-    imports: [PrismaModule, AuthModule],
+    imports: [PrismaModule, ConfigModule], // << здесь теперь есть ConfigModule
     controllers: [ProfileController],
-    providers: [ProfileService],
+    providers: [ProfileService], // << регистрируем guard в модуле
 })
 export class ProfileModule {}
